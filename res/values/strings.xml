@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">درع العفّة</string>
+    <string name="service_desc">درع العفّة يحجب المحتوى الإباحي والريلز. يقرأ نصوص الشاشة على جهازك فقط ليعرف متى يحجب، ولا يملك إذن الإنترنت، ولا يرسل أو يحفظ أي محتوى.</string>
+</resources>

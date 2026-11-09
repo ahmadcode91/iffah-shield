@@ -1,0 +1,1 @@
+First release: keyword/site blocking, Reels & Shorts blocking, strict mode, uninstall protection, panic button, guided setup.

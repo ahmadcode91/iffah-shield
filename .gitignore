@@ -1,0 +1,6 @@
+out/
+gen/
+obj/
+*.keystore
+*.jks
+password.txt

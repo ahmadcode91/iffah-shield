@@ -1,0 +1,15 @@
+Iffah Shield is a free, open-source porn blocker for Android. It has no ads, no subscription and no internet permission. Arabic-first, works in any language.
+
+• Blocks adult keywords and sites in every app and browser (500+ built-in terms, 12+ languages, catches leetspeak like p0rn)
+• Blocks Instagram Reels, Facebook Reels and YouTube Shorts, while DMs and posts keep working
+• Blocks incognito/private tabs
+• App blocking, daily time limits, auto-block of newly installed apps
+• Removes notifications containing adult words
+• Strict mode: protection can't be turned off. Unlocking needs a 24-hour cooldown that clock changes can't skip
+• Uninstall protection (device admin)
+• Panic button: breathing exercise, urge timer, your reasons, call a friend, temporary lockdown
+• Accountability partner code
+• Clean-days streak and stats
+• Built-in guide for the free CleanBrowsing family DNS (system-wide filter + SafeSearch)
+
+Privacy: no INTERNET permission, no data collection. Accessibility is used on-device only.
