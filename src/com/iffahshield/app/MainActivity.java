@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     private final Runnable refresher = new Runnable() {
         @Override public void run() {
             if (countdown != null && s.unlockRemaining() >= 0) countdown.setText(fmtRemaining());
+            else if (countdown != null) render(); // strict mode just ended: refresh the screen
             h.postDelayed(this, 1000);
         }
     };
@@ -46,6 +47,7 @@ public class MainActivity extends Activity {
         ScrollView sv = new ScrollView(this);
         sv.setBackgroundColor(Ui.BG);
         sv.setFillViewport(true);
+        sv.setFitsSystemWindows(true);
         content = Ui.vbox(this);
         int p = Ui.dp(this, 16);
         content.setPadding(p, Ui.dp(this, 28), p, Ui.dp(this, 40));
@@ -92,7 +94,7 @@ public class MainActivity extends Activity {
         } });
         content.addView(panic);
         if (s.inLockdown()) {
-            long m = (s.lockUntil() - System.currentTimeMillis()) / 60000 + 1;
+            long m = s.lockRemaining() / 60000 + 1;
             TextView lk = Ui.text(this, "🔒 وضع الطوارئ مفعّل، المتبقي " + m + " دقيقة.", 14, Ui.WARN, true);
             content.addView(lk);
         }
@@ -338,12 +340,15 @@ public class MainActivity extends Activity {
             .setNegativeButton("إغلاق", null).show();
     }
 
+    private boolean disclosureShowing = false;
+
     private void maybeDisclosure() {
         final android.content.SharedPreferences sp = getSharedPreferences("ui", MODE_PRIVATE);
-        if (sp.getBoolean("disclosed", false)) return;
+        if (sp.getBoolean("disclosed", false) || disclosureShowing) return;
+        disclosureShowing = true;
         new AlertDialog.Builder(this).setCancelable(false).setTitle("قبل أن تبدأ: خصوصيتك")
             .setMessage("يستخدم «درع العفّة» خدمة «إمكانية الوصول» في أندرويد لقراءة النصوص الظاهرة على الشاشة، فقط ليعرف متى يحجب المحتوى الإباحي والريلز ويحمي إعداداته.\n\n"
-                + "• لا يملك التطبيق إذن الإنترنت إطلاقاً.\n• لا يرسل ولا يحفظ أي نص أو صورة من شاشتك.\n• يحفظ فقط أعداداً (كم مرة حُجب شيء) على هاتفك.\n"
+                + "• لا يملك التطبيق إذن الإنترنت إطلاقاً.\n• لا يرسل ولا يحفظ أي نص أو صورة من شاشتك.\n• يحفظ على هاتفك فقط: إعداداتك وقوائمك، وأعداد مرات الحجب، ووقت استخدام التطبيقات المحدودة، وأسبابك ورقم صديقك إن أضفتهما.\n"
                 + "• الحماية من الحذف تستخدم صلاحية «مسؤول الجهاز» لمنع الحذف فقط، دون أي صلاحية أخرى.\n\nبالضغط على «موافق» فأنت توافق على ذلك.")
             .setPositiveButton("موافق", new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, int w) {
                 sp.edit().putBoolean("disclosed", true).apply(); } })
@@ -547,6 +552,7 @@ public class MainActivity extends Activity {
             .setMessage("ستُحجب أي صفحة أو شاشة تحتوي على هذه الكلمة.")
             .setPositiveButton("إضافة", new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, int w) {
                 if (s.addKeyword(e.getText().toString())) { GuardService.matcherVersion++; toast("تمت الإضافة ✓"); }
+                else toast("الكلمة يجب أن تكون 3 أحرف على الأقل، وغير مكررة.");
                 render();
             } })
             .setNegativeButton("إلغاء", null).show();

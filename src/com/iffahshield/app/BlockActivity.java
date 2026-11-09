@@ -79,6 +79,7 @@ public class BlockActivity extends Activity {
         left = s.countdown();
         tick.run();
 
+        root.setFitsSystemWindows(true);
         setContentView(root);
     }
 

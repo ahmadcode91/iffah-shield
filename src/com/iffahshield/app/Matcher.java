@@ -59,7 +59,9 @@ public final class Matcher {
 
     public int size() { return pats.size(); }
 
-    public static String normalize(CharSequence in) {
+    public static String normalize(CharSequence raw) {
+        // NFKC folds full-width / stylised letters (e.g. math alphanumerics) into plain ones.
+        String in = java.text.Normalizer.normalize(raw, java.text.Normalizer.Form.NFKC);
         StringBuilder b = new StringBuilder(in.length());
         boolean space = false;
         for (int i = 0; i < in.length(); i++) {
@@ -73,9 +75,11 @@ public final class Matcher {
                 case 'ى': c = 'ي'; break;
                 case 'ؤ': c = 'و'; break;
                 case 'ئ': c = 'ي'; break;
+                case 'ک': c = 'ك'; break;
+                case 'ی': c = 'ي'; break;
                 default: c = Character.toLowerCase(c);
             }
-            if (Character.isWhitespace(c)) {
+            if (Character.isWhitespace(c) || Character.isSpaceChar(c)) {
                 if (!space) b.append(' ');
                 space = true;
             } else { b.append(c); space = false; }
@@ -90,7 +94,7 @@ public final class Matcher {
             switch (c) {
                 case '0': r = 'o'; break; case '1': r = 'i'; break; case '3': r = 'e'; break;
                 case '4': r = 'a'; break; case '5': r = 's'; break; case '@': r = 'a'; break;
-                case '$': r = 's'; break;
+                case '$': r = 's'; break; case '7': r = 't'; break;
             }
             if (r != c && b == null) { b = new StringBuilder(t); }
             if (b != null) b.setCharAt(i, r);
@@ -103,7 +107,10 @@ public final class Matcher {
         String r = scan(text);
         if (r != null) return r;
         String l = leet(text);
-        return l == null ? null : scan(l);
+        if (l == null) return null;
+        r = scan(l);
+        if (r != null) return r;
+        return text.indexOf('1') >= 0 ? scan(l.replace('i', 'l')) : null;
     }
 
     private String scan(String text) {

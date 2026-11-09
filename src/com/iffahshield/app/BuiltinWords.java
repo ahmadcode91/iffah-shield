@@ -10,7 +10,7 @@ final class BuiltinWords {
         // ---------- adult sites / brands / domains (substring) ----------
         "pornhub", "xvideos", "xnxx", "xhamster", "redtube", "youporn", "tube8", "spankbang", "eporner",
         "txxx", "hclips", "hdzog", "upornia", "porntrex", "pornone", "porn300", "4tube", "porntube",
-        "tnaflix", "empflix", "drtuber", "sunporno", "nuvid", "motherless", "heavy-r", "thumbzilla",
+        "tnaflix", "empflix", "drtuber", "sunporno", "nuvid", "motherless.com", "heavy-r", "thumbzilla",
         "youjizz", "porndig", "pornhat", "hqporner", "daftsex", "sxyprn", "porngo", "perfectgirls",
         "anysex", "cumlouder", "xxxbunker", "slutload", "keezmovies", "extremetube", "mofosex",
         "faphouse", "fapello", "fapopedia", "thothub", "coomer.", "leakedmodels", "onlyfans", "fansly",
@@ -29,9 +29,9 @@ final class BuiltinWords {
         // ---------- English (whole words) ----------
         "=sex", "=sexy", "=sexting", "=sexcam", "=nude", "=nudes", "=nudity", "=naked", "=porno",
         "=milf", "=milfs", "=dilf", "=boobs", "=boobies", "=tits", "=titties", "=titty", "=pussy",
-        "=pussies", "=cock", "=cocks", "=cumshot", "=cumshots", "=creampie", "=blowjob",
+        "=pussies", "=cumshot", "=cumshots", "=creampie", "=blowjob",
         "=blowjobs", "=handjob", "=footjob", "=deepthroat", "=gangbang", "=bukkake", "=orgasm",
-        "=orgasms", "=orgy", "=orgies", "=threesome", "=anal", "=horny", "=slut", "=sluts", "=slutty",
+        "=orgasms", "=orgy", "=orgies", "=threesome", "=horny", "=slut", "=sluts", "=slutty",
         "=whore", "=whores", "=hooker", "=hookers", "=stripper", "=strippers", "=striptease",
         "=lingerie", "=nipple", "=nipples", "=erotica", "=erotic", "=fetish", "=bondage",
         "=dominatrix", "=futanari", "=ecchi", "=camgirl", "=camgirls", "=livesex", "=thot", "=thots",
@@ -50,7 +50,7 @@ final class BuiltinWords {
         "=vibrator", "=dildo", "=dildos", "=sex toy", "=sex toys", "=kinky", "=kink", "=fetishes",
 
         // ---------- Arabic (substring, normalized) ----------
-        "سكس", "اباحي", "=بورن", "بورنو", "افلام جنس", "فيلم جنس", "فلم جنس", "مقاطع جنس", "مقطع جنس", "صور جنس",
+        "=سكس", "سكس عربي", "سكس محارم", "افلام سكس", "فيلم سكس", "مقاطع سكس", "صور سكس", "قصص سكس", "اباحي", "=بورن", "بورنو", "افلام جنس", "فيلم جنس", "فلم جنس", "مقاطع جنس", "مقطع جنس", "صور جنس",
         "فيديو جنس", "فيديوهات جنس", "قصص جنس", "قصص جنسيه", "صور جنسيه", "افلام جنسيه", "مشاهد جنسيه",
         "صور عاري", "صور عاريه", "صور بنات عاري", "مقاطع ساخن", "مقطع ساخن", "فيديو ساخن", "فيديوهات ساخن",
         "افلام ساخن", "فيلم ساخن", "بنات ساخن", "نسوان ساخن", "صور ساخن", "لقطات ساخن", "مشاهد ساخن",
@@ -59,12 +59,12 @@ final class BuiltinWords {
         "سحاقيات", "لواط", "رقص اغراء", "رقص مغري", "بنات اغراء", "صور اغراء", "فيديو اغراء", "اغراء بنات",
         "لبس اغراء", "قمصان نوم", "قميص نوم", "ملابس داخليه نسائي", "لانجري", "ستربتيز", "عاريات",
         "صدر عاري", "طياز", "افلام للكبار", "للكبار فقط", "مقاطع للكبار", "فيديو للكبار",
-        "قصص محارم", "نيك محارم", "سكس محارم", "افلام محارم", "رقص شرقي ساخن", "رقص ساخن", "بدله رقص",
-        "بنات تيك توك ساخن", "بنات عريانه", "عريانه", "عريان", "بنت عاريه", "مشاهير عاريات", "فضايح بنات",
+        "قصص محارم", "نيك محارم", "افلام محارم", "رقص شرقي ساخن", "رقص ساخن", "بدله رقص",
+        "بنات تيك توك ساخن", "بنات عريانه", "=عريانه", "=عريان", "بنت عاريه", "مشاهير عاريات", "فضايح بنات",
         "فضيحه بنت", "تسريبات بنات", "مقاطع فاضحه", "صور فاضحه", "فيديو فاضح", "مقطع فاضح", "شات جنسي",
         "دردشه جنسيه", "كام جنسي", "جنس فموي", "جنس شرجي", "جنس جماعي", "العاده السريه", "استمناء",
         "نيكني", "انيكك", "انيكها", "متناكه", "شراميط", "قحبه", "منايك",
-        "=طيز", "=زبر", "بزاز", "كسمك", "كسختك", "فحل نيك", "نسوانجي", "نسوان جي",
+        "=طيز", "=زبر", "=بزاز", "كسمك", "كسختك", "فحل نيك", "نسوانجي", "نسوان جي",
         "ساخنه جدا", "صور سكسي", "بنات سكسي", "رقص سكسي",
 
         // ---------- Arabic (whole words) ----------
@@ -75,13 +75,13 @@ final class BuiltinWords {
         // ---------- Franco-Arabic / transliteration ----------
         "sharmota", "sharmouta", "sharmoota", "sharmuta", "kos omak", "kos okhtak", "kosomak", "teezha",
         "sex arab", "arab sex", "arabsex", "sex 3arab", "aflam sex", "sexy arab", "arab porn", "egypt sex",
-        "masry sex", "sex masry", "neek", "nayek", "=kuss", "=zebi",
+        "masry sex", "sex masry", "neek", "nayek", "=zebi",
         "=teez", "=sharmo", "=a7a sex", "=sex3", "=s3x", "=seks", "=sexx", "=sexxx", "=secks",
 
         // ---------- Other languages ----------
         "порно", "секс", "голые", "голая", "эротик", "шлюх", "проститутк",                // Russian
         "sikis", "sikiş", "türk porno", "=çıplak", "=seks", "=amcık", "=yarrak",               // Turkish
-        "سکس", "=کس", "=کیر", "=کون", "سوپر ایرانی", "فیلم سوپر", "=جنده",                      // Persian
+        "=سکس", "=کس", "=کیر", "سوپر ایرانی", "فیلم سوپر", "=جنده",                      // Persian
         "=salope", "=salopes", "=baise", "=nue", "=nues", "=sexe", "=chatte",        // French
         "=desnuda", "=desnudas", "=desnudo", "=puta", "=putas", "=tetas", "=coño", "=follar",
         "=sexo", "=culo",                                                                       // Spanish

@@ -137,6 +137,7 @@ public class PanicActivity extends Activity {
         } });
         root.addView(done);
 
+        sv.setFitsSystemWindows(true);
         setContentView(sv);
     }
 

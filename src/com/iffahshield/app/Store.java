@@ -35,8 +35,10 @@ public final class Store {
     };
 
     private final SharedPreferences p;
+    private final Context ctx;
 
     public Store(Context c) {
+        ctx = c.getApplicationContext();
         p = c.getApplicationContext().getSharedPreferences("shield", Context.MODE_PRIVATE);
         if (!p.contains("init")) {
             p.edit().putBoolean("init", true)
@@ -90,11 +92,16 @@ public final class Store {
     }
 
     // ---------- panic / partner / reasons ----------
-    public long lockUntil() { return p.getLong("lockUntil", 0); }
-    public boolean inLockdown() { return System.currentTimeMillis() < lockUntil(); }
+    /** Remaining lockdown in ms (0 = none). Uses boot-relative time, so changing the clock can't end it. */
+    public long lockRemaining() {
+        if (p.getInt("lockBoot", -2) != boot()) return 0;
+        return Math.max(0, p.getLong("lockUntilE", 0) - SystemClock.elapsedRealtime());
+    }
+    public long lockUntil() { return System.currentTimeMillis() + lockRemaining(); }
+    public boolean inLockdown() { return lockRemaining() > 0; }
     public void lockdown(int minutes) {
-        long until = System.currentTimeMillis() + minutes * 60_000L;
-        if (until > lockUntil()) p.edit().putLong("lockUntil", until).apply();
+        long until = SystemClock.elapsedRealtime() + minutes * 60_000L;
+        if (minutes * 60_000L > lockRemaining()) p.edit().putLong("lockUntilE", until).putInt("lockBoot", boot()).apply();
     }
     public String reasons() { return p.getString("reasons", ""); }
     public void setReasons(String r) { p.edit().putString("reasons", r == null ? "" : r.trim()).apply(); }
@@ -123,18 +130,25 @@ public final class Store {
     }
     public boolean checkPartner(String code) {
         if (!hasPartner() || code == null) return false;
-        long wait = p.getLong("partnerLockUntil", 0);
-        if (SystemClock.elapsedRealtime() < wait) return false;
+        long wait = p.getLong("partnerLockWall", 0), nowW = System.currentTimeMillis();
+        if (nowW < wait && wait - nowW <= 30 * 60_000L) return false;
         boolean ok = sha(code).equals(p.getString("partnerHash", ""));
         int fails = ok ? 0 : p.getInt("partnerFails", 0) + 1;
         SharedPreferences.Editor e = p.edit().putInt("partnerFails", fails);
-        if (fails >= 3) e.putLong("partnerLockUntil", SystemClock.elapsedRealtime() + 30 * 60_000L).putInt("partnerFails", 0);
+        if (fails >= 3) e.putLong("partnerLockWall", System.currentTimeMillis() + 30 * 60_000L).putInt("partnerFails", 0);
         e.apply();
         return ok;
     }
     public List<String> apps() { return split(p.getString("apps", "")); }
 
-    public boolean addKeyword(String w) { return addTo("keywords", w); }
+    /** At least 3 real characters, so one short word can't brick the phone in strict mode. */
+    public boolean addKeyword(String w) {
+        if (w == null) return false;
+        String core = w.trim();
+        if (core.startsWith("=")) core = core.substring(1).trim();
+        if (core.length() < 3) return false;
+        return addTo("keywords", w);
+    }
     public boolean addApp(String pkg) { return addTo("apps", pkg); }
     public boolean removeKeyword(String w) { return removeFrom("keywords", w); }
     public boolean removeApp(String pkg) { return removeFrom("apps", pkg); }
@@ -224,19 +238,25 @@ public final class Store {
     public void requestUnlock() {
         if (!isStrict() || unlockRemaining() >= 0) return;
         p.edit().putLong("unlockRemaining", UNLOCK_DELAY_MS)
-            .putLong("lastTick", SystemClock.elapsedRealtime()).apply();
+            .putLong("lastTick", SystemClock.elapsedRealtime()).putInt("lastBoot", boot()).apply();
     }
 
     public void cancelUnlock() { p.edit().putLong("unlockRemaining", -1).apply(); }
 
     public long unlockRemaining() { return p.getLong("unlockRemaining", -1); }
 
+    /** Boot counter: lets timers count real powered-on time (sleep included) but not time while switched off. */
+    int boot() {
+        try { return android.provider.Settings.Global.getInt(ctx.getContentResolver(), "boot_count"); }
+        catch (Exception e) { return -1; }
+    }
+
     /** Remaining time including the part not yet saved by the service's 30s tick. */
     public long liveRemaining() {
         long r = unlockRemaining();
         if (r < 0) return r;
         long d = SystemClock.elapsedRealtime() - p.getLong("lastTick", SystemClock.elapsedRealtime());
-        if (d < 0 || d > 10 * 60 * 1000) d = 0;
+        if (d < 0 || boot() != p.getInt("lastBoot", boot())) d = 0;
         return Math.max(0, r - d);
     }
 
@@ -245,10 +265,13 @@ public final class Store {
         long rem = unlockRemaining();
         long now = SystemClock.elapsedRealtime();
         long last = p.getLong("lastTick", now);
-        SharedPreferences.Editor e = p.edit().putLong("lastTick", now);
+        int b = boot();
+        boolean sameBoot = b == p.getInt("lastBoot", b) && b != -1;
+        SharedPreferences.Editor e = p.edit().putLong("lastTick", now).putInt("lastBoot", b);
         if (rem < 0 || !isStrict()) { e.apply(); return false; }
         long d = now - last;
-        if (d < 0 || d > 10 * 60 * 1000) d = 0; // reboot or long gap: don't count, can't be gamed
+        // Same boot: elapsedRealtime includes deep sleep, so the phone was on the whole time. New boot: don't count.
+        if (d < 0 || !sameBoot) d = 0;
         rem -= d;
         if (rem <= 0) {
             e.putBoolean("strict", false).putLong("unlockRemaining", -1).apply();

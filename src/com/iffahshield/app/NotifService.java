@@ -27,7 +27,7 @@ public class NotifService extends NotificationListenerService {
         if (store == null) store = new Store(this);
         if (!store.flag("notif") || store.isPaused()) return;
         String pkg = sbn.getPackageName();
-        if (GuardService.NEVER_BLOCK.contains(pkg)) return;
+        if (GuardService.NEVER_BLOCK.contains(pkg) || GuardService.SKIP_WORDS.contains(pkg)) return;
         boolean kill = store.apps().contains(pkg) || store.overLimit(pkg);
         if (!kill && store.flag("words")) {
             if (matcher == null || builtVersion != GuardService.matcherVersion) {

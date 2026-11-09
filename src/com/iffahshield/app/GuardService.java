@@ -32,18 +32,23 @@ public class GuardService extends AccessibilityService {
     static volatile long matcherVersion = 0;
 
     // Never scanned for keywords (our UI, terminal, keyboards, system UI, private chats, settings).
-    private static final Set<String> SKIP_WORDS = new HashSet<String>(Arrays.asList(
-        "com.iffahshield.app", "com.termux", "com.android.systemui", "com.sec.android.app.launcher",
+    static final Set<String> SKIP_WORDS = new HashSet<String>(Arrays.asList(
+        "com.android.phone", "com.samsung.android.dialer", "com.google.android.dialer", "com.android.dialer",
+        "com.samsung.android.incallui", "com.android.incallui", "com.android.server.telecom", "com.android.emergency",
+        "com.samsung.android.contacts", "com.google.android.contacts", "com.android.contacts",
+        "com.samsung.android.app.telephonyui", "com.google.android.apps.safetyhub",
+        "com.iffahshield.app", "com.android.systemui", "com.sec.android.app.launcher",
         "com.samsung.android.honeyboard", "com.google.android.inputmethod.latin",
         "com.whatsapp", "com.whatsapp.w4b", "com.google.android.gm", "com.samsung.android.messaging",
-        "ch.protonvpn.android", "com.android.settings"));
+        "com.android.settings"));
 
     // Apps that must never be blocked or time-limited.
     static final Set<String> NEVER_BLOCK = new HashSet<String>(Arrays.asList(
-        "com.iffahshield.app", "com.termux", "com.android.settings", "ch.protonvpn.android",
+        "com.iffahshield.app", "com.android.settings",
         "com.android.systemui", "com.sec.android.app.launcher", "com.android.phone",
         "com.samsung.android.dialer", "com.google.android.dialer", "com.samsung.android.incallui",
-        "com.android.server.telecom"));
+        "com.android.server.telecom", "com.android.dialer", "com.android.incallui",
+        "com.android.emergency", "com.samsung.android.app.telephonyui", "com.google.android.apps.safetyhub"));
 
     // Still usable during a panic lockdown.
     private static final Set<String> LOCKDOWN_ALLOW = new HashSet<String>(Arrays.asList(
@@ -65,14 +70,14 @@ public class GuardService extends AccessibilityService {
         "com.google.android.packageinstaller", "com.android.packageinstaller",
         "com.samsung.android.packageinstaller", "com.samsung.android.lool",
         "com.samsung.android.sm.devicesecurity", "com.android.vending",
-        "com.sec.android.app.launcher", "com.google.android.permissioncontroller"));
+        "com.google.android.permissioncontroller", "com.samsung.accessibility"));
 
     // Separate spaces where neither Hisn nor Proton protect: blocked outright in strict mode.
     private static final String[] ESCAPE_PKG_PREFIXES = {
         "com.samsung.knox.securefolder", "com.samsung.android.da.daagent" };
 
     private static final String[] OWN_LABELS = { "درع العفه", "iffah shield" };
-    private static final String[] PROTECTED_LABELS = { "proton vpn" };
+    private static final String[] PROTECTED_LABELS = { };
     private static final String[] DANGER = {
         "الغاء التثبيت", "فرض الايقاف", "تعطيل", "حذف ملف تعريف", "ازاله",
         "uninstall", "force stop", "disable", "remove" };
@@ -83,8 +88,9 @@ public class GuardService extends AccessibilityService {
         "المجلد الامن", "secure folder", "الماسنجر المزدوج", "dual messenger",
         "اضافه ضيف", "add guest", "اضافه مستخدم", "add user" };
     private static final String[] INCOGNITO = {
-        "تصفح متخفي", "التصفح المتخفي", "وضع التصفح المتخفي", "علامه تبويب جديده للتصفح المتخفي",
-        "incognito", "الوضع السري", "secret mode", "private browsing", "التصفح الخاص" };
+        "وضع التصفح المتخفي", "اصبحت في وضع التصفح المتخفي", "انتقلت الى وضع التصفح المتخفي",
+        "you've gone incognito", "you’ve gone incognito", "incognito mode", "secret mode is on",
+        "الوضع السري قيد التشغيل", "private browsing mode", "ntp_incognito_marker" };
 
     private static final String[][] REEL_IDS = {
         { "com.instagram.android", "com.instagram.android:id/clips_viewer_view_pager" },
@@ -117,8 +123,21 @@ public class GuardService extends AccessibilityService {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             if (pm != null && !pm.isInteractive()) setForeground(null);
             else {
-                setForeground(fgPkg); // flush time so far
-                if (fgPkg != null && !store.isPaused() && store.overLimit(fgPkg))
+                String cur = fgPkg;
+                try {
+                    AccessibilityNodeInfo r = getRootInActiveWindow();
+                    if (r != null) {
+                        CharSequence rp = r.getPackageName();
+                        r.recycle();
+                        if (rp != null) {
+                            String p = rp.toString();
+                            if (isLaunchable(p) && !p.equals("com.iffahshield.app") && !isExempt(p)) cur = p;
+                            else if (isExempt(p)) cur = null;
+                        }
+                    }
+                } catch (Exception ignored) { }
+                setForeground(cur); // flush time so far
+                if (fgPkg != null && !inCall() && !isExempt(fgPkg) && !store.isPaused() && store.overLimit(fgPkg))
                     block("limit", "انتهى وقتك اليومي لهذا التطبيق. سيُتاح غداً.", true);
             }
             if (++ticks % 120 == 0) store.pruneUsage();
@@ -132,7 +151,7 @@ public class GuardService extends AccessibilityService {
             Uri u = i.getData();
             if (u == null || store == null || !store.flag("newApps")) return;
             String pkg = u.getSchemeSpecificPart();
-            if (pkg == null || NEVER_BLOCK.contains(pkg)) return;
+            if (pkg == null || isExempt(pkg)) return;
             if (getPackageManager().getLaunchIntentForPackage(pkg) == null) return;
             if (store.addApp(pkg)) toast("تم حظر التطبيق الجديد تلقائياً.");
         }
@@ -160,6 +179,47 @@ public class GuardService extends AccessibilityService {
 
     @Override public void onInterrupt() { }
 
+    private final Set<String> runtimeExempt = new HashSet<String>();
+    private long exemptAt = 0;
+
+    /** Default phone, SMS, home and keyboard apps can never be blocked, limited or locked down. */
+    boolean isExempt(String pkg) {
+        if (pkg == null) return true;
+        if (NEVER_BLOCK.contains(pkg)) return true;
+        long now = SystemClock.elapsedRealtime();
+        if (now - exemptAt > 60_000 || exemptAt == 0) {
+            exemptAt = now;
+            runtimeExempt.clear();
+            try {
+                android.telecom.TelecomManager tm = (android.telecom.TelecomManager) getSystemService(Context.TELECOM_SERVICE);
+                if (tm != null && tm.getDefaultDialerPackage() != null) runtimeExempt.add(tm.getDefaultDialerPackage());
+            } catch (Exception ignored) { }
+            try {
+                String sms = android.provider.Telephony.Sms.getDefaultSmsPackage(this);
+                if (sms != null) runtimeExempt.add(sms);
+            } catch (Exception ignored) { }
+            try {
+                android.content.pm.ResolveInfo ri = getPackageManager().resolveActivity(
+                    new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0);
+                if (ri != null && ri.activityInfo != null) runtimeExempt.add(ri.activityInfo.packageName);
+            } catch (Exception ignored) { }
+            try {
+                String ime = android.provider.Settings.Secure.getString(getContentResolver(), "default_input_method");
+                if (ime != null && ime.contains("/")) runtimeExempt.add(ime.substring(0, ime.indexOf('/')));
+            } catch (Exception ignored) { }
+        }
+        return runtimeExempt.contains(pkg);
+    }
+
+    private boolean inCall() {
+        try {
+            android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            int m = am == null ? 0 : am.getMode();
+            return m == android.media.AudioManager.MODE_IN_CALL || m == android.media.AudioManager.MODE_IN_COMMUNICATION
+                || m == android.media.AudioManager.MODE_RINGTONE;
+        } catch (Exception e) { return false; }
+    }
+
     private boolean isLaunchable(String pkg) {
         Boolean b = launchable.get(pkg);
         if (b == null) {
@@ -182,7 +242,7 @@ public class GuardService extends AccessibilityService {
         boolean stateChange = e.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
 
         if (stateChange) {
-            if (evPkg.equals("com.sec.android.app.launcher")) setForeground(null);
+            if (evPkg.equals("com.sec.android.app.launcher") || (isExempt(evPkg) && !evPkg.equals("com.android.systemui"))) setForeground(null);
             else if (!evPkg.equals(fgPkg) && isLaunchable(evPkg) && !evPkg.equals("com.iffahshield.app")) setForeground(evPkg);
         }
 
@@ -233,18 +293,19 @@ public class GuardService extends AccessibilityService {
         String pkg = rp.toString();
         if (pkg.equals("com.iffahshield.app")) return false;
 
-        if (store.apps().contains(pkg) && !NEVER_BLOCK.contains(pkg)) {
+        if (inCall() || isExempt(pkg)) { /* never touch calls, dialer, SMS, home, keyboard */ }
+        else if (store.apps().contains(pkg)) {
             block("app", "هذا التطبيق محظور.", true); return true;
         }
-        if (store.inLockdown() && !NEVER_BLOCK.contains(pkg) && !LOCKDOWN_ALLOW.contains(pkg) && isLaunchable(pkg)) {
+        if (!inCall() && store.inLockdown() && !isExempt(pkg) && !LOCKDOWN_ALLOW.contains(pkg) && isLaunchable(pkg)) {
             block("panic", "وضع الطوارئ مفعّل. التطبيقات مقفلة حتى تمضي اللحظة.", true); return true;
         }
-        if (store.overLimit(pkg) && !NEVER_BLOCK.contains(pkg)) {
+        if (!inCall() && !isExempt(pkg) && store.overLimit(pkg)) {
             block("limit", "انتهى وقتك اليومي لهذا التطبيق. سيُتاح غداً.", true); return true;
         }
 
         if (store.isStrict() && GUARDED_PKGS.contains(pkg)) {
-            String t = Matcher.normalize(collect(root, 900));
+            String t = Matcher.normalize(collect(root, 900, false));
             if (guardHit(pkg, t)) { block("settings", "هذا الإعداد مقفل في الوضع الصارم.", true); return true; }
         }
 
@@ -255,20 +316,24 @@ public class GuardService extends AccessibilityService {
             quietBack("stories", "الستوريات محظورة 🛡", soloActive); return true;
         }
 
-        if (SKIP_WORDS.contains(pkg)) return false;
+        if (SKIP_WORDS.contains(pkg) || isExempt(pkg) || inCall()) return false;
         boolean browser = BROWSERS.contains(pkg);
 
         if (browser && store.flag("incognito")) {
-            String t = Matcher.normalize(collect(root, 300));
+            String t = Matcher.normalize(collectUi(root, 400));
             for (String w : INCOGNITO) if (t.contains(w)) {
-                block("incognito", "التصفح المتخفي محظور.", !soloActive); return true;
+                blockBrowser(pkg, "incognito", "التصفح المتخفي محظور."); return true;
             }
         }
 
         if (store.flag("words")) {
             ensureMatcher();
-            String t = Matcher.normalize(collect(root, browser ? 1200 : 700));
-            if (matcher.find(t) != null) { block("words", "تم حجب محتوى غير لائق.", !soloActive); return true; }
+            String t = Matcher.normalize(collect(root, browser ? 1200 : 700, browser));
+            if (matcher.find(t) != null) {
+                if (browser) blockBrowser(pkg, "words", "تم حجب محتوى غير لائق.");
+                else block("words", "تم حجب محتوى غير لائق.", !soloActive);
+                return true;
+            }
         }
         return false;
     }
@@ -356,14 +421,63 @@ public class GuardService extends AccessibilityService {
     }
 
     /** Breadth-first text collection of visible nodes, bounded for speed. */
-    static String collect(AccessibilityNodeInfo root, int maxNodes) {
+    /**
+     * Browser UI that only lists titles of pages already seen (new-tab tiles, history suggestions,
+     * tab switcher). Scanning it would lock the browser forever after one blocked page, so it is
+     * skipped; opening any of those pages is still blocked by its own content and URL.
+     */
+    private static final String[] BROWSER_CHROME_IDS = {
+        "tile", "mv_tiles", "suggestion", "omnibox_results", "tab_switcher", "tab_list", "tab_grid",
+        "tab_title", "most_visited", "history_", "recent_tabs", "resumption", "magic_stack", "single_tab" };
+
+    private static boolean browserChrome(AccessibilityNodeInfo n) {
+        CharSequence id = n.getViewIdResourceName();
+        if (id == null) return false;
+        String s = id.toString();
+        for (String k : BROWSER_CHROME_IDS) if (s.contains(k)) return true;
+        return false;
+    }
+
+    static String collect(AccessibilityNodeInfo root, int maxNodes) { return collect(root, maxNodes, false); }
+
+    /** Native browser UI text only: skips web page content and menus (for incognito detection). */
+    static String collectUi(AccessibilityNodeInfo root, int maxNodes) {
+        StringBuilder sb = new StringBuilder(512);
+        ArrayDeque<AccessibilityNodeInfo> q = new ArrayDeque<AccessibilityNodeInfo>();
+        q.add(AccessibilityNodeInfo.obtain(root));
+        int n = 0;
+        while (!q.isEmpty()) {
+            AccessibilityNodeInfo x = q.poll();
+            CharSequence cls = x.getClassName();
+            CharSequence vid = x.getViewIdResourceName();
+            String id = vid == null ? "" : vid.toString();
+            boolean web = cls != null && cls.toString().contains("WebView");
+            boolean menu = id.contains("menu") || id.contains("popup");
+            if (n++ < maxNodes && !web && !menu) {
+                if (x.isVisibleToUser()) {
+                    if ((id.contains("incognito") || id.contains("secret")) && (id.contains("ntp") || id.contains("new_tab") || id.contains("page"))) sb.append(" ntp_incognito_marker \n ");
+                    CharSequence t = x.getText(), d = x.getContentDescription();
+                    if (t != null && t.length() > 0) sb.append(t).append(" \n ");
+                    if (d != null && d.length() > 0) sb.append(d).append(" \n ");
+                }
+                for (int i = 0; i < x.getChildCount(); i++) {
+                    AccessibilityNodeInfo c = x.getChild(i);
+                    if (c != null) q.add(c);
+                }
+            }
+            x.recycle();
+        }
+        return sb.toString();
+    }
+
+    static String collect(AccessibilityNodeInfo root, int maxNodes, boolean skipBrowserChrome) {
         StringBuilder sb = new StringBuilder(2048);
         ArrayDeque<AccessibilityNodeInfo> q = new ArrayDeque<AccessibilityNodeInfo>();
         q.add(AccessibilityNodeInfo.obtain(root));
         int n = 0;
         while (!q.isEmpty()) {
             AccessibilityNodeInfo x = q.poll();
-            if (n++ < maxNodes) {
+            if (n++ < maxNodes && !(skipBrowserChrome && browserChrome(x))) {
                 if (x.isVisibleToUser()) {
                     CharSequence t = x.getText(), d = x.getContentDescription();
                     if (t != null && t.length() > 0) sb.append(t).append(" \n ");
@@ -384,6 +498,22 @@ public class GuardService extends AccessibilityService {
         store.countBlock(category);
         coolUntil = SystemClock.uptimeMillis() + 700;
         toast(msg);
+    }
+
+    /** Leave the bad page (BACK), then open a clean page in the same browser so it never reopens on it. */
+    private void blockBrowser(String pkg, String category, String reason) {
+        coolUntil = SystemClock.uptimeMillis() + 1500;
+        store.countBlock(category);
+        performGlobalAction(GLOBAL_ACTION_BACK);
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/"))
+                .setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Exception ignored) { }
+        final Intent i = new Intent(this, BlockActivity.class).putExtra("reason", reason)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+        h.postDelayed(new Runnable() { @Override public void run() {
+            try { startActivity(i); } catch (Exception ignored) { }
+        } }, 400);
     }
 
     private void block(String category, String reason, boolean home) {

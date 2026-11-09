@@ -1,0 +1,1 @@
+Important fixes: calls, contacts and emergency are never blocked; Chrome no longer gets stuck after a block; fewer false positives; accurate 24h timer; stylised-text detection.
