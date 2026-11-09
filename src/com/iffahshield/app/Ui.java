@@ -27,14 +27,14 @@ final class Ui {
     static LinearLayout vbox(Context c) {
         LinearLayout l = new LinearLayout(c);
         l.setOrientation(LinearLayout.VERTICAL);
-        l.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        l.setLayoutDirection(L.en ? View.LAYOUT_DIRECTION_LTR : View.LAYOUT_DIRECTION_RTL);
         return l;
     }
 
     static LinearLayout hbox(Context c) {
         LinearLayout l = new LinearLayout(c);
         l.setOrientation(LinearLayout.HORIZONTAL);
-        l.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+        l.setLayoutDirection(L.en ? View.LAYOUT_DIRECTION_LTR : View.LAYOUT_DIRECTION_RTL);
         l.setGravity(Gravity.CENTER_VERTICAL);
         return l;
     }
@@ -55,7 +55,7 @@ final class Ui {
         t.setText(s);
         t.setTextSize(sp);
         t.setTextColor(color);
-        t.setTextDirection(View.TEXT_DIRECTION_RTL);
+        t.setTextDirection(L.en ? View.TEXT_DIRECTION_FIRST_STRONG_LTR : View.TEXT_DIRECTION_RTL);
         t.setGravity(Gravity.START);
         if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
         t.setLineSpacing(0, 1.15f);

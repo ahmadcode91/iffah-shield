@@ -10,6 +10,7 @@ public class AdminReceiver extends DeviceAdminReceiver {
     static ComponentName component(Context c) { return new ComponentName(c, AdminReceiver.class); }
 
     @Override public CharSequence onDisableRequested(Context c, Intent i) {
-        return "هذا التطبيق يحميك. إن كانت لحظة ضعف فستمضي. عد واضغط «أشعر بالضعف الآن».";
+        L.init(c);
+        return L.t("هذا التطبيق يحميك. إن كانت لحظة ضعف فستمضي. عد واضغط «أشعر بالضعف الآن».", "This app protects you. If it's a weak moment, it will pass. Go back and tap \"I feel weak right now\".");
     }
 }

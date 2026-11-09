@@ -53,6 +53,10 @@ public final class Store {
             mine.removeAll(Arrays.asList(DEFAULT_WORDS));
             p.edit().putBoolean("v3", true).putString("keywords", join(mine.toArray(new String[0]))).apply();
         }
+        if (!p.contains("v4")) {
+            p.edit().putBoolean("v4", true).putBoolean("safesearch", true).putBoolean("newBrowsers", true)
+                .putBoolean("adhkar", false).putBoolean("night", false).putBoolean("kids", false).apply();
+        }
         if (!p.contains("v2")) {
             p.edit().putBoolean("v2", true).putBoolean("stories", false).putBoolean("newApps", false)
                 .putBoolean("notif", true).putInt("countdown", 5).apply();
@@ -77,6 +81,7 @@ public final class Store {
     /** Turning a protection OFF is refused while strict mode is on. */
     public boolean setFlag(String k, boolean v) {
         if (!v && isStrict()) return false;
+        if (v && "kids".equals(k) && kidApps().isEmpty()) return false; // would lock every app
         p.edit().putBoolean(k, v).apply();
         return true;
     }
@@ -311,4 +316,97 @@ public final class Store {
     public void resetStreak() { p.edit().putLong("streakStart", System.currentTimeMillis()).apply(); }
     public int bestStreak() { return Math.max(p.getInt("bestStreak", 0), streakDays()); }
     public void saveBest() { p.edit().putInt("bestStreak", bestStreak()).apply(); }
+
+    // ---------- language ("auto" follows the phone) ----------
+    public String lang() { return p.getString("lang", "auto"); }
+    public void setLang(String l) { p.edit().putString("lang", l).apply(); }
+
+    // ---------- adhkar (optional; when on, the phone opens only after finishing them) ----------
+    public static final int MORNING_END = 14 * 60, EVENING_END = 4 * 60;
+    public int morningStart() { return p.getInt("mStart", 7 * 60 + 30); }
+    public int eveningStart() { return p.getInt("eStart", 21 * 60); }
+    public void setAdhkarTimes(int m, int e) { p.edit().putInt("mStart", m).putInt("eStart", e).apply(); }
+
+    /** Session key for "now": "m:yyyyMMdd" / "e:yyyyMMdd", or null outside both windows. */
+    public String sessionNow() {
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        int m = c.get(java.util.Calendar.HOUR_OF_DAY) * 60 + c.get(java.util.Calendar.MINUTE);
+        SimpleDateFormat f = new SimpleDateFormat("yyyyMMdd", Locale.US);
+        if (m >= morningStart() && m < MORNING_END) return "m:" + f.format(c.getTime());
+        if (m >= eveningStart()) return "e:" + f.format(c.getTime());
+        if (m < EVENING_END) { c.add(java.util.Calendar.DAY_OF_MONTH, -1); return "e:" + f.format(c.getTime()); }
+        return null;
+    }
+    public String adhkarDue() {
+        if (!flag("adhkar")) return null;
+        String k = sessionNow();
+        if (k == null || p.getBoolean("dk_" + k, false)) return null;
+        return k;
+    }
+    public void adhkarDone(String key) {
+        p.edit().putBoolean("dk_" + key, true).remove("dpos_" + key).remove("dcnt_" + key)
+            .putInt("adhkarTotal", p.getInt("adhkarTotal", 0) + 1).apply();
+        pruneAdhkar();
+    }
+    public int adhkarTotal() { return p.getInt("adhkarTotal", 0); }
+    public int adhkarPos(String key) { return p.getInt("dpos_" + key, 0); }
+    public int adhkarCount(String key) { return p.getInt("dcnt_" + key, 0); }
+    public void saveAdhkar(String key, int pos, int cnt) { p.edit().putInt("dpos_" + key, pos).putInt("dcnt_" + key, cnt).apply(); }
+    private void pruneAdhkar() {
+        SharedPreferences.Editor e = p.edit();
+        String min = new SimpleDateFormat("yyyyMMdd", Locale.US).format(new Date(System.currentTimeMillis() - 3L * 24 * 60 * 60 * 1000));
+        for (String k : p.getAll().keySet()) {
+            int i = k.indexOf(':');
+            if ((k.startsWith("dk_") || k.startsWith("dpos_") || k.startsWith("dcnt_")) && i > 0 && k.substring(i + 1).compareTo(min) < 0) e.remove(k);
+        }
+        e.apply();
+    }
+    public void adhkarSeen() { p.edit().putLong("adhkarSeen", System.currentTimeMillis()).apply(); }
+    public long adhkarSeenAt() { return p.getLong("adhkarSeen", 0); }
+
+    // ---------- night lock ----------
+    public int nightStart() { return p.getInt("nightStart", 0); }
+    public int nightEnd() { return p.getInt("nightEnd", 5); }
+    /** Turning it on (or longer) is always allowed; off or shorter only outside strict mode. */
+    public boolean setNight(boolean on, int start, int end) {
+        if (isStrict() && flag("night")) {
+            if (!on) return false;
+            for (int h = nightStart(); h != nightEnd(); h = (h + 1) % 24)
+                if (!inWindow(h, start, end)) return false;
+        }
+        p.edit().putBoolean("night", on).putInt("nightStart", start).putInt("nightEnd", end).apply();
+        return true;
+    }
+    static boolean inWindow(int h, int s, int e) { return s <= e ? (h >= s && h < e) : (h >= s || h < e); }
+    public boolean inNightLock() {
+        if (!flag("night")) return false;
+        int h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        int s = nightStart(), e = nightEnd();
+        return s <= e ? (h >= s && h < e) : (h >= s || h < e);
+    }
+
+    // ---------- kids mode: only allowed apps and sites open ----------
+    public List<String> kidApps() { return split(p.getString("kidApps", "")); }
+    public List<String> kidSites() { return split(p.getString("kidSites", "")); }
+    /** Adding to the allow lists widens access, so it is refused in strict mode. */
+    public boolean addKidApp(String pkg) { return !(isStrict() && flag("kids")) && addTo("kidApps", pkg); }
+    public boolean removeKidApp(String pkg) { return removeFrom("kidApps", pkg); }
+    public boolean addKidSite(String host) {
+        host = host == null ? "" : host.trim().toLowerCase(Locale.US).replaceFirst("^https?://", "").replaceFirst("^www\\.", "");
+        int sl = host.indexOf('/'); if (sl > 0) host = host.substring(0, sl);
+        return host.contains(".") && !(isStrict() && flag("kids")) && addTo("kidSites", host);
+    }
+    public boolean removeKidSite(String h) { return removeFrom("kidSites", h); }
+
+    // ---------- recovery: urge triggers and slips (counts only) ----------
+    public static final String[] TRIGGERS_AR = { "ملل/فراغ", "وحدة", "تعب/نعاس", "توتر/حزن", "في السرير/الليل", "صورة أو مقطع رأيته" };
+    public static final String[] TRIGGERS_EN = { "Boredom", "Loneliness", "Tiredness", "Stress/sadness", "In bed/at night", "Something I saw" };
+    public static String[] triggers() { return L.en ? TRIGGERS_EN : TRIGGERS_AR; }
+    public void logTrigger(int i) { p.edit().putInt("trig_" + i, p.getInt("trig_" + i, 0) + 1).apply(); }
+    public int trigger(int i) { return p.getInt("trig_" + i, 0); }
+    public void logUrgeWon() { p.edit().putInt("urgesWon", p.getInt("urgesWon", 0) + 1).apply(); }
+    public int urgesWon() { return p.getInt("urgesWon", 0); }
+    public void logSlip() { p.edit().putInt("slips", p.getInt("slips", 0) + 1).apply(); saveBest(); resetStreak(); }
+    public String plan() { return p.getString("plan", ""); }
+    public void setPlan(String s) { p.edit().putString("plan", s == null ? "" : s.trim()).apply(); }
 }

@@ -57,6 +57,11 @@ public class GuardService extends AccessibilityService {
         "com.sec.android.app.popupcalculator", "com.google.android.apps.maps", "com.samsung.android.app.notes",
         "com.samsung.android.contacts", "com.google.android.contacts", "com.samsung.android.calendar"));
 
+    // Also usable during the night lock (Quran and alarms).
+    private static final Set<String> NIGHT_ALLOW = new HashSet<String>(Arrays.asList(
+        "com.quran.labs.androidquran", "com.greentech.quran", "com.mmmoussa.quran", "com.sec.android.app.clockpackage",
+        "com.google.android.deskclock"));
+
     private static final Set<String> BROWSERS = new HashSet<String>(Arrays.asList(
         "com.android.chrome", "com.chrome.beta", "com.chrome.dev", "com.sec.android.app.sbrowser",
         "org.mozilla.firefox", "org.mozilla.focus", "com.opera.browser", "com.opera.mini.native",
@@ -86,7 +91,8 @@ public class GuardService extends AccessibilityService {
         "حظر الاتصالات من دون vpn", "تشغيل vpn دائما", "always-on vpn", "block connections without vpn",
         "اعاده ضبط بيانات المصنع", "factory data reset",
         "المجلد الامن", "secure folder", "الماسنجر المزدوج", "dual messenger",
-        "اضافه ضيف", "add guest", "اضافه مستخدم", "add user" };
+        "اضافه ضيف", "add guest", "اضافه مستخدم", "add user",
+        "التاريخ والوقت التلقائي", "تعيين الوقت", "تعيين التاريخ", "automatic date and time" };
     private static final String[] INCOGNITO = {
         "وضع التصفح المتخفي", "اصبحت في وضع التصفح المتخفي", "انتقلت الى وضع التصفح المتخفي",
         "you've gone incognito", "you’ve gone incognito", "incognito mode", "secret mode is on",
@@ -119,11 +125,12 @@ public class GuardService extends AccessibilityService {
 
     private final Runnable ticker = new Runnable() {
         @Override public void run() {
-            if (store.tick()) toast("انتهت مهلة الـ24 ساعة، وتم إيقاف الوضع الصارم.");
+            if (store.tick()) toast(L.t("انتهت مهلة الـ24 ساعة، وتم إيقاف الوضع الصارم.", "The 24 hours are over; strict mode is now off."));
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             if (pm != null && !pm.isInteractive()) setForeground(null);
             else {
-                String cur = fgPkg;
+                L.init(GuardService.this);
+                String cur = fgPkg, top = "";
                 try {
                     AccessibilityNodeInfo r = getRootInActiveWindow();
                     if (r != null) {
@@ -131,14 +138,16 @@ public class GuardService extends AccessibilityService {
                         r.recycle();
                         if (rp != null) {
                             String p = rp.toString();
+                            top = p;
                             if (isLaunchable(p) && !p.equals("com.iffahshield.app") && !isExempt(p)) cur = p;
                             else if (isExempt(p)) cur = null;
                         }
                     }
                 } catch (Exception ignored) { }
                 setForeground(cur); // flush time so far
+                if (!store.isPaused() && adhkarNeeded(top)) forceAdhkar();
                 if (fgPkg != null && !inCall() && !isExempt(fgPkg) && !store.isPaused() && store.overLimit(fgPkg))
-                    block("limit", "انتهى وقتك اليومي لهذا التطبيق. سيُتاح غداً.", true);
+                    block("limit", L.t("انتهى وقتك اليومي لهذا التطبيق. سيُتاح غداً.", "Your daily time for this app is up. It opens again tomorrow."), true);
             }
             if (++ticks % 120 == 0) store.pruneUsage();
             h.postDelayed(this, 30_000);
@@ -149,11 +158,16 @@ public class GuardService extends AccessibilityService {
         @Override public void onReceive(Context c, Intent i) {
             if (i.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return;
             Uri u = i.getData();
-            if (u == null || store == null || !store.flag("newApps")) return;
+            if (u == null || store == null) return;
             String pkg = u.getSchemeSpecificPart();
             if (pkg == null || isExempt(pkg)) return;
             if (getPackageManager().getLaunchIntentForPackage(pkg) == null) return;
-            if (store.addApp(pkg)) toast("تم حظر التطبيق الجديد تلقائياً.");
+            if (store.flag("newBrowsers") && isUnknownBrowser(pkg)) {
+                if (store.addApp(pkg)) toast(L.t("تم حظر المتصفح الجديد تلقائياً.", "The new browser was blocked automatically."));
+                return;
+            }
+            if (!store.flag("newApps")) return;
+            if (store.addApp(pkg)) toast(L.t("تم حظر التطبيق الجديد تلقائياً.", "The new app was blocked automatically."));
         }
     };
 
@@ -167,7 +181,174 @@ public class GuardService extends AccessibilityService {
         IntentFilter f = new IntentFilter(Intent.ACTION_PACKAGE_ADDED);
         f.addDataScheme("package");
         try { registerReceiver(pkgReceiver, f); } catch (Exception ignored) { }
+        L.init(this);
+        h.postDelayed(new Runnable() { @Override public void run() { blockUnknownBrowsers(); } }, 5000);
     }
+
+    // ---------- browsers the app doesn't know: blocked, so they can't be used to slip past ----------
+    private List<String> webHandlers() {
+        List<String> out = new ArrayList<String>();
+        try {
+            Intent v = new Intent(Intent.ACTION_VIEW, Uri.parse("http://example.com/")).addCategory(Intent.CATEGORY_BROWSABLE);
+            for (android.content.pm.ResolveInfo ri : getPackageManager().queryIntentActivities(v, 0x00020000 /* MATCH_ALL */))
+                if (ri.activityInfo != null && !out.contains(ri.activityInfo.packageName)) out.add(ri.activityInfo.packageName);
+        } catch (Exception ignored) { }
+        return out;
+    }
+
+    private boolean isUnknownBrowser(String pkg) {
+        return !BROWSERS.contains(pkg) && !NEVER_BLOCK.contains(pkg) && !pkg.equals("com.iffahshield.app") && webHandlers().contains(pkg);
+    }
+
+    private void blockUnknownBrowsers() {
+        if (store == null || !store.flag("newBrowsers")) return;
+        int n = 0;
+        for (String pkg : webHandlers())
+            if (isUnknownBrowser(pkg) && !isExempt(pkg) && getPackageManager().getLaunchIntentForPackage(pkg) != null && store.addApp(pkg)) n++;
+        if (n > 0) toast(L.t("تم حظر " + n + " متصفح غير معروف.", n + " unknown browser(s) blocked."));
+    }
+
+    // ---------- adhkar lock ----------
+    private static final Set<String> ADHKAR_ALLOW = new HashSet<String>(Arrays.asList(
+        "com.iffahshield.app", "com.android.phone", "com.samsung.android.dialer", "com.google.android.dialer",
+        "com.samsung.android.incallui", "com.android.server.telecom", "com.android.dialer", "com.android.incallui",
+        "com.android.emergency", "com.samsung.android.app.telephonyui", "com.google.android.apps.safetyhub",
+        "com.android.systemui", "com.samsung.android.honeyboard", "com.google.android.inputmethod.latin",
+        "com.sec.android.app.clockpackage", "com.google.android.deskclock"));
+    private long adhkarLaunchAt = 0, adhkarFirstLaunch = 0;
+    private int adhkarLaunches = 0;
+    private String adhkarGaveUp = null;
+    private long adhkarGaveUpAt = 0;
+
+    private boolean adhkarNeeded(String pkg) {
+        if (inCall()) return false;
+        String due = store.adhkarDue();
+        if (due == null) return false;
+        if (due.equals(adhkarGaveUp) && System.currentTimeMillis() - adhkarGaveUpAt < 5 * 60_000L) return false;
+        try {
+            android.app.KeyguardManager km = (android.app.KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+            if (km != null && km.isKeyguardLocked()) return false; // can't show over the lock screen; wait for unlock
+        } catch (Exception ignored) { }
+        if (ADHKAR_ALLOW.contains(pkg)) return false;
+        try {
+            android.telecom.TelecomManager tm = (android.telecom.TelecomManager) getSystemService(Context.TELECOM_SERVICE);
+            if (tm != null && pkg.equals(tm.getDefaultDialerPackage())) return false;
+        } catch (Exception ignored) { }
+        return true;
+    }
+
+    private void forceAdhkar() {
+        long now = System.currentTimeMillis();
+        if (Math.abs(now - adhkarLaunchAt) < 1500) return;
+        // Crash safety: if the screen never managed to show after several tries, pause forcing for 5 minutes.
+        if (store.adhkarSeenAt() >= adhkarFirstLaunch) { adhkarLaunches = 0; adhkarFirstLaunch = now; }
+        if (++adhkarLaunches > 8 && now - adhkarFirstLaunch > 20_000) {
+            adhkarGaveUp = store.adhkarDue(); adhkarGaveUpAt = now; adhkarLaunches = 0; adhkarFirstLaunch = now; return;
+        }
+        adhkarLaunchAt = now;
+        try {
+            startActivity(new Intent(this, AdhkarActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
+        } catch (Exception ignored) { }
+    }
+
+    // ---------- safe search ----------
+    private static final String[] URL_IDS = { "url_bar", "location_bar", "url_field", "url_view", "address_bar", "addressbar", "mozac_browser_toolbar_url_view" };
+    private long safeAt = 0;
+    private String lastSafe = null;
+
+    private String urlText(AccessibilityNodeInfo root) {
+        ArrayDeque<AccessibilityNodeInfo> q = new ArrayDeque<AccessibilityNodeInfo>();
+        q.add(AccessibilityNodeInfo.obtain(root));
+        String found = null;
+        int n = 0;
+        while (!q.isEmpty()) {
+            AccessibilityNodeInfo x = q.poll();
+            if (found == null && n++ < 250) {
+                CharSequence id = x.getViewIdResourceName();
+                CharSequence cls = x.getClassName();
+                boolean web = cls != null && cls.toString().contains("WebView");
+                if (id != null && x.isVisibleToUser() && !x.isFocused()) {
+                    String sid = id.toString();
+                    for (String k : URL_IDS) if (sid.contains(k)) {
+                        CharSequence t = x.getText();
+                        if (t != null && t.length() > 4) found = t.toString();
+                        break;
+                    }
+                }
+                if (!web) for (int i = 0; i < x.getChildCount(); i++) {
+                    AccessibilityNodeInfo c = x.getChild(i);
+                    if (c != null) q.add(c);
+                }
+            }
+            x.recycle();
+        }
+        return found;
+    }
+
+    /** Returns the same search forced to safe mode, "" to block it, or null when nothing needs changing. */
+    static String safeUrl(String raw) {
+        if (raw == null) return null;
+        String t = raw.trim();
+        if (t.indexOf(' ') >= 0 || t.indexOf('.') < 0) return null;
+        if (!t.startsWith("http://") && !t.startsWith("https://")) t = "https://" + t;
+        Uri u;
+        try { u = Uri.parse(t); } catch (Exception e) { return null; }
+        String host = u.getHost() == null ? "" : u.getHost().toLowerCase(java.util.Locale.US);
+        String path = u.getPath() == null ? "" : u.getPath();
+        String key = null, val = null;
+        if ((host.startsWith("google.") || host.contains(".google.")) && (path.startsWith("/search") || path.startsWith("/imgres"))) { key = "safe"; val = "active"; }
+        else if (host.endsWith("bing.com") && (path.startsWith("/search") || path.startsWith("/images") || path.startsWith("/videos"))) { key = "adlt"; val = "strict"; }
+        else if (host.endsWith("duckduckgo.com") && u.getQueryParameter("q") != null) { key = "kp"; val = "1"; }
+        else if (host.startsWith("search.yahoo.") || host.startsWith("images.search.yahoo.") || host.startsWith("video.search.yahoo.")) { key = "vm"; val = "r"; }
+        else if (host.contains("yandex.") && (path.startsWith("/images") || path.startsWith("/video"))) return "";
+        if (key == null) return null;
+        if (val.equals(u.getQueryParameter(key))) return null;
+        Uri.Builder b = u.buildUpon().clearQuery();
+        for (String name : u.getQueryParameterNames()) {
+            if (name.equals(key)) continue;
+            for (String v : u.getQueryParameters(name)) b.appendQueryParameter(name, v);
+        }
+        b.appendQueryParameter(key, val);
+        return b.build().toString();
+    }
+
+    private boolean enforceSafeSearch(AccessibilityNodeInfo root, String pkg) {
+        if (SystemClock.uptimeMillis() - safeAt < 2500) return false;
+        String safe = safeUrl(urlText(root));
+        if (safe == null) return false;
+        if (safe.length() > 0 && safe.equals(lastSafe) && SystemClock.uptimeMillis() - safeAt < 60_000) return false; // engine dropped the flag: don't loop
+        lastSafe = safe;
+        safeAt = SystemClock.uptimeMillis();
+        if (safe.length() == 0) { blockBrowser(pkg, "safesearch", L.t("بحث الصور في هذا المحرك غير مُفلتر، لذلك هو محظور.", "Image search on this engine is unfiltered, so it is blocked.")); return true; }
+        store.countBlock("safesearch");
+        performGlobalAction(GLOBAL_ACTION_BACK);
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(safe)).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Exception ignored) { }
+        toast(L.t("البحث الآمن مفروض 🛡", "Safe search enforced 🛡"));
+        return true;
+    }
+
+    // ---------- kids mode ----------
+    private boolean kidsBlocked(AccessibilityNodeInfo root, String pkg) {
+        if (!store.flag("kids") || inCall() || isExempt(pkg) || !isLaunchable(pkg)) return false;
+        if (!store.kidApps().contains(pkg)) return true;
+        if (!BROWSERS.contains(pkg)) return false;
+        List<String> sites = store.kidSites();
+        if (sites.isEmpty()) return false;
+        String u = urlText(root);
+        if (u == null) return kidLastBlocked;   // no address visible: keep the last decision
+        String t = u.trim().toLowerCase(java.util.Locale.US);
+        if (t.indexOf(' ') >= 0 || t.indexOf('.') < 0) return kidLastBlocked = true; // a search, not an allowed site
+        if (!t.startsWith("http://") && !t.startsWith("https://")) t = "https://" + t;
+        String host;
+        try { host = Uri.parse(t).getHost(); } catch (Exception e) { return false; }
+        if (host == null) return kidLastBlocked;
+        for (String site : sites) if (host.equals(site) || host.endsWith("." + site)) return kidLastBlocked = false;
+        return kidLastBlocked = true;
+    }
+    private boolean kidLastBlocked = true;
 
     @Override public void onDestroy() {
         running = false;
@@ -254,7 +435,7 @@ public class GuardService extends AccessibilityService {
 
         // Secure Folder / similar spaces: no protection exists inside them.
         if (store.isStrict()) for (String pre : ESCAPE_PKG_PREFIXES) if (evPkg.startsWith(pre)) {
-            block("settings", "المجلد الآمن مقفل في الوضع الصارم، لأنه لا حماية بداخله.", true);
+            block("settings", L.t("المجلد الآمن مقفل في الوضع الصارم، لأنه لا حماية بداخله.", "Secure Folder is locked in strict mode, because there's no protection inside it."), true);
             return;
         }
 
@@ -293,27 +474,37 @@ public class GuardService extends AccessibilityService {
         String pkg = rp.toString();
         if (pkg.equals("com.iffahshield.app")) return false;
 
+        if (adhkarNeeded(pkg)) { forceAdhkar(); return true; }
+        if (kidsBlocked(root, pkg)) {
+            if (BROWSERS.contains(pkg) && store.kidApps().contains(pkg)) blockBrowser(pkg, "kids", L.t("هذا الموقع غير مسموح في وضع الأطفال.", "This site isn't allowed in kids mode."));
+            else block("kids", L.t("هذا التطبيق غير مسموح في وضع الأطفال.", "This app isn't allowed in kids mode."), true);
+            return true;
+        }
+
         if (inCall() || isExempt(pkg)) { /* never touch calls, dialer, SMS, home, keyboard */ }
         else if (store.apps().contains(pkg)) {
-            block("app", "هذا التطبيق محظور.", true); return true;
+            block("app", L.t("هذا التطبيق محظور.", "This app is blocked."), true); return true;
         }
         if (!inCall() && store.inLockdown() && !isExempt(pkg) && !LOCKDOWN_ALLOW.contains(pkg) && isLaunchable(pkg)) {
-            block("panic", "وضع الطوارئ مفعّل. التطبيقات مقفلة حتى تمضي اللحظة.", true); return true;
+            block("panic", L.t("وضع الطوارئ مفعّل. التطبيقات مقفلة حتى تمضي اللحظة.", "Emergency lock is on. Apps are locked until the moment passes."), true); return true;
+        }
+        if (!inCall() && store.inNightLock() && !isExempt(pkg) && !LOCKDOWN_ALLOW.contains(pkg) && !NIGHT_ALLOW.contains(pkg) && isLaunchable(pkg)) {
+            block("night", L.t("قفل الليل مفعّل 🌙 ضع الهاتف ونم، غداً يوم جديد.", "Night lock is on 🌙 Put the phone down and sleep. Tomorrow is a new day."), true); return true;
         }
         if (!inCall() && !isExempt(pkg) && store.overLimit(pkg)) {
-            block("limit", "انتهى وقتك اليومي لهذا التطبيق. سيُتاح غداً.", true); return true;
+            block("limit", L.t("انتهى وقتك اليومي لهذا التطبيق. سيُتاح غداً.", "Your daily time for this app is up. It opens again tomorrow."), true); return true;
         }
 
         if (store.isStrict() && GUARDED_PKGS.contains(pkg)) {
             String t = Matcher.normalize(collect(root, 900, false));
-            if (guardHit(pkg, t)) { block("settings", "هذا الإعداد مقفل في الوضع الصارم.", true); return true; }
+            if (guardHit(pkg, t)) { block("settings", L.t("هذا الإعداد مقفل في الوضع الصارم.", "This setting is locked in strict mode."), true); return true; }
         }
 
         if (store.flag("reels") && (byIds(root, pkg, REEL_IDS) || facebookReels(root, pkg))) {
-            quietBack("reels", "الريلز محظورة 🛡", soloActive); return true;
+            quietBack("reels", L.t("الريلز محظورة 🛡", "Reels are blocked 🛡"), soloActive); return true;
         }
         if (store.flag("stories") && byIds(root, pkg, STORY_IDS)) {
-            quietBack("stories", "الستوريات محظورة 🛡", soloActive); return true;
+            quietBack("stories", L.t("الستوريات محظورة 🛡", "Stories are blocked 🛡"), soloActive); return true;
         }
 
         if (SKIP_WORDS.contains(pkg) || isExempt(pkg) || inCall()) return false;
@@ -322,16 +513,18 @@ public class GuardService extends AccessibilityService {
         if (browser && store.flag("incognito")) {
             String t = Matcher.normalize(collectUi(root, 400));
             for (String w : INCOGNITO) if (t.contains(w)) {
-                blockBrowser(pkg, "incognito", "التصفح المتخفي محظور."); return true;
+                blockBrowser(pkg, "incognito", L.t("التصفح المتخفي محظور.", "Incognito browsing is blocked.")); return true;
             }
         }
+
+        if (browser && store.flag("safesearch") && enforceSafeSearch(root, pkg)) return true;
 
         if (store.flag("words")) {
             ensureMatcher();
             String t = Matcher.normalize(collect(root, browser ? 1200 : 700, browser));
             if (matcher.find(t) != null) {
-                if (browser) blockBrowser(pkg, "words", "تم حجب محتوى غير لائق.");
-                else block("words", "تم حجب محتوى غير لائق.", !soloActive);
+                if (browser) blockBrowser(pkg, "words", L.t("تم حجب محتوى غير لائق.", "Inappropriate content was blocked."));
+                else block("words", L.t("تم حجب محتوى غير لائق.", "Inappropriate content was blocked."), !soloActive);
                 return true;
             }
         }
@@ -506,7 +699,9 @@ public class GuardService extends AccessibilityService {
         store.countBlock(category);
         performGlobalAction(GLOBAL_ACTION_BACK);
         try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/"))
+            String home = "https://www.google.com/";
+            if (store.flag("kids") && !store.kidSites().isEmpty()) home = "https://" + store.kidSites().get(0) + "/";
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(home))
                 .setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         } catch (Exception ignored) { }
         final Intent i = new Intent(this, BlockActivity.class).putExtra("reason", reason)

@@ -1,0 +1,9 @@
+• Morning & evening adhkar with a tasbih counter, optionally locking the phone until done.
+• Recovery plan (CBT/ACT + Quran & Sunnah) with trigger tracking.
+• Streak badges, one day to one year.
+• Night lock.
+• Forced safe search on Google, Bing, DuckDuckGo, Yahoo.
+• Unknown browsers blocked automatically.
+• Kids mode: only allowed apps and sites.
+• Full English interface.
+• Verses and hadith on the block screen.

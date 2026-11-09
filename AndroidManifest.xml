@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.iffahshield.app">
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <category android:name="android.intent.category.BROWSABLE"/>
+            <data android:scheme="http"/>
+        </intent>
         <intent>
             <action android:name="android.intent.action.MAIN"/>
             <category android:name="android.intent.category.LAUNCHER"/>
@@ -20,6 +26,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity android:name=".AdhkarActivity" android:exported="false"
+            android:excludeFromRecents="true" android:launchMode="singleTask"
+            android:taskAffinity="com.iffahshield.app.adhkar"/>
+        <activity android:name=".RecoveryActivity" android:exported="false"/>
         <activity android:name=".PanicActivity" android:exported="false"
             android:excludeFromRecents="true" android:taskAffinity="com.iffahshield.app.panic"/>
         <activity android:name=".BlockActivity" android:exported="false"
