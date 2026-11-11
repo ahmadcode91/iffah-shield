@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Iffah Shield</string>
-    <string name="service_desc">Iffah Shield blocks adult content and Reels. It reads on-screen text on your device only to know when to block. It has no internet permission and never sends or stores any content.</string>
+    <string name="service_desc">Iffah Shield blocks inappropriate content and Reels. It reads on-screen text on your device only to know when to block. It has no internet permission and never sends or stores any content.</string>
 </resources>

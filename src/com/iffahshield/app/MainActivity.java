@@ -118,7 +118,7 @@ public class MainActivity extends Activity {
                     .putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, AdminReceiver.component(MainActivity.this))
                     .putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
                         L.t("بهذا لا يستطيع أحد حذف التطبيق في لحظة ضعف. لا يستخدم التطبيق أي صلاحية أخرى.", "This way no one can uninstall the app in a weak moment. The app uses no other permission."))); } }));
-            sc.addView(step(dnsOn, L.t("4. فلتر المواقع الإباحية لكل الهاتف (DNS)", "4. Phone-wide adult-site filter (DNS)"), new Runnable() { public void run() { dnsGuide(); } }));
+            sc.addView(step(dnsOn, L.t("4. فلتر المواقع غير اللائقة لكل الهاتف (DNS)", "4. Phone-wide adult-site filter (DNS)"), new Runnable() { public void run() { dnsGuide(); } }));
             sc.addView(step(strict, L.t("5. الوضع الصارم (آخر خطوة)", "5. Strict mode (last step)"), new Runnable() { public void run() {
                 if (serviceOn()) confirmStrict(); else toast(L.t("فعّل الخطوة 1 أولاً.", "Do step 1 first.")); } }));
             content.addView(sc);
@@ -188,8 +188,8 @@ public class MainActivity extends Activity {
         LinearLayout prot = Ui.card(this);
         prot.addView(Ui.text(this, L.t("الحماية", "Protection"), 18, Ui.TEXT, true));
         prot.addView(toggle("reels", L.t("حجب الريلز والشورتس", "Block Reels & Shorts"), L.t("إنستغرام وفيسبوك ويوتيوب. تبقى الرسائل والمنشورات متاحة. (", "Instagram, Facebook and YouTube. Messages and posts still work. (") + s.cat("reels") + L.t(" مرة)", "×)")));
-        prot.addView(toggle("words", L.t("حجب الكلمات الإباحية", "Block adult words"), L.t("في أي تطبيق أو متصفح، بالعربية والإنجليزية ولغات أخرى. (", "In any app or browser, in Arabic, English and other languages. (") + s.cat("words") + L.t(" مرة)", "×)")));
-        if (android.os.Build.VERSION.SDK_INT >= 30) prot.addView(toggle("images", L.t("كشف الصور بالذكاء الاصطناعي 👁", "AI image detection 👁"), L.t("يفحص الشاشة نفسها ويحجب الصور والمقاطع العارية حتى لو لم يكن فيها أي كلمة (كالمولَّدة بالذكاء الاصطناعي). كل شيء يتم داخل الهاتف، ولا تُحفظ أي صورة ولا تُرسل. (" + s.cat("image") + " مرة)", "Looks at the screen itself and blocks nude images and videos even with no words in them (such as AI-generated ones). Everything runs on the phone; no image is saved or sent. (" + s.cat("image") + "×)")));
+        prot.addView(toggle("words", L.t("حجب الكلمات غير اللائقة", "Block adult words"), L.t("في أي تطبيق أو متصفح، بالعربية والإنجليزية ولغات أخرى. (", "In any app or browser, in Arabic, English and other languages. (") + s.cat("words") + L.t(" مرة)", "×)")));
+        if (android.os.Build.VERSION.SDK_INT >= 30) prot.addView(toggle("images", L.t("كشف الصور بالذكاء الاصطناعي 👁", "AI image detection 👁"), L.t("يفحص الشاشة نفسها ويحجب الصور والمقاطع العارية حتى لو لم يكن فيها أي كلمة (كالمولَّدة بالذكاء الاصطناعي). كل شيء يتم داخل الهاتف، ولا تُحفظ أي صورة ولا تُرسل. (" + s.cat("image") + " مرة)", "Looks at the screen itself and blocks indecent images and videos even with no words in them (such as AI-generated ones). Everything runs on the phone; no image is saved or sent. (" + s.cat("image") + "×)")));
         prot.addView(toggle("safesearch", L.t("البحث الآمن إجباري", "Force safe search"), L.t("يفتح Google وBing وDuckDuckGo وYahoo دائماً بالوضع الآمن. (" + s.cat("safesearch") + " مرة)", "Google, Bing, DuckDuckGo and Yahoo always open in safe mode. (" + s.cat("safesearch") + "×)")));
         prot.addView(toggle("newBrowsers", L.t("حظر المتصفحات غير المعروفة", "Block unknown browsers"), L.t("يُحظر تلقائياً أي متصفح غير المتصفحات المعروفة، حتى لا يكون باباً للالتفاف.", "Any browser other than the known ones is blocked automatically, so it can't be used to get around protection.")));
         prot.addView(toggle("incognito", L.t("منع التصفح المتخفي", "Block incognito browsing"), L.t("Chrome وSamsung Internet وغيرها. (", "Chrome, Samsung Internet and others. (") + s.cat("incognito") + L.t(" مرة)", "×)")));
@@ -394,8 +394,8 @@ public class MainActivity extends Activity {
     static final String DNS_HOST = "family-filter-dns.cleanbrowsing.org";
 
     private void dnsGuide() {
-        new AlertDialog.Builder(this).setTitle(L.t("فلتر المواقع الإباحية (مجاني)", "Adult-site filter (free)"))
-            .setMessage(L.t("هذا الفلتر يحجب آلاف المواقع الإباحية في كل الهاتف، ويفرض البحث الآمن في Google وYouTube، ويعمل حتى لو توقف التطبيق.\n\n", "This filter blocks thousands of adult sites across the whole phone, forces safe search on Google and YouTube, and works even if the app stops.\n\n")
+        new AlertDialog.Builder(this).setTitle(L.t("فلتر المواقع غير اللائقة (مجاني)", "Adult-site filter (free)"))
+            .setMessage(L.t("هذا الفلتر يحجب آلاف المواقع غير اللائقة في كل الهاتف، ويفرض البحث الآمن في Google وYouTube، ويعمل حتى لو توقف التطبيق.\n\n", "This filter blocks thousands of adult sites across the whole phone, forces safe search on Google and YouTube, and works even if the app stops.\n\n")
                 + L.t("الخطوات:\n1. اضغط «نسخ العنوان».\n2. اضغط «فتح الإعدادات».\n3. ابحث في الإعدادات عن «DNS الخاص» (Private DNS).\n", "Steps:\n1. Tap \"Copy address\".\n2. Tap \"Open settings\".\n3. Search settings for \"Private DNS\".\n")
                 + L.t("4. اختر «اسم مضيف موفر DNS الخاص» والصق العنوان:\n\n", "4. Choose \"Private DNS provider hostname\" and paste the address:\n\n") + DNS_HOST + L.t("\n\n5. احفظ.\n\nالخدمة من CleanBrowsing، مجانية للعائلات.", "\n\n5. Save.\n\nThe service is from CleanBrowsing, free for families."))
             .setPositiveButton(L.t("نسخ العنوان", "Copy address"), new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, int w) {
@@ -418,8 +418,8 @@ public class MainActivity extends Activity {
         if (sp.getBoolean("disclosed", false) || disclosureShowing) return;
         disclosureShowing = true;
         new AlertDialog.Builder(this).setCancelable(false).setTitle(L.t("قبل أن تبدأ: خصوصيتك", "Before you start: your privacy"))
-            .setMessage(L.t("يستخدم «درع العفّة» خدمة «إمكانية الوصول» في أندرويد لقراءة النصوص الظاهرة على الشاشة، فقط ليعرف متى يحجب المحتوى الإباحي والريلز ويحمي إعداداته.\n\n", "Iffah Shield uses Android's Accessibility service to read the text shown on screen, only to know when to block adult content and Reels and to protect its own settings.\n\n")
-                + L.t("• لا يملك التطبيق إذن الإنترنت إطلاقاً.\n• لا يرسل ولا يحفظ أي نص أو صورة من شاشتك.\n• يحفظ على هاتفك فقط: إعداداتك وقوائمك، وأعداد مرات الحجب، ووقت استخدام التطبيقات المحدودة، وأسبابك ورقم صديقك إن أضفتهما.\n", "• The app has no internet permission at all.\n• It never sends or stores any text or image from your screen.\n• It stores only on your phone: your settings and lists, block counts, usage time of limited apps, and your reasons and friend's number if you add them.\n")
+            .setMessage(L.t("يستخدم «درع العفّة» خدمة «إمكانية الوصول» في أندرويد لقراءة النصوص الظاهرة على الشاشة، فقط ليعرف متى يحجب المحتوى غير اللائق والريلز ويحمي إعداداته.\n\n", "Iffah Shield uses Android's Accessibility service to read the text shown on screen, only to know when to block inappropriate content and Reels and to protect its own settings.\n\n")
+                + L.t("• لا يملك التطبيق إذن الإنترنت إطلاقاً.\n• لا يرسل ولا يحفظ أي نص أو صورة من شاشتك.\n• كشف الصور (أندرويد 11 فأحدث، ويمكن إيقافه): يأخذ لقطة للشاشة ويحللها داخل الهاتف فقط ليعرف هل فيها صورة غير لائقة، ثم يحذفها فوراً.\n• يحفظ على هاتفك فقط: إعداداتك وقوائمك، وأعداد مرات الحجب، ووقت استخدام التطبيقات المحدودة، وأسبابك ورقم صديقك إن أضفتهما.\n", "• The app has no internet permission at all.\n• It never sends or stores any text or image from your screen.\n• Image detection (Android 11+, can be turned off): takes a screenshot and analyses it on the phone only, to tell whether an indecent image is shown, then discards it at once.\n• It stores only on your phone: your settings and lists, block counts, usage time of limited apps, and your reasons and friend's number if you add them.\n")
                 + L.t("• الحماية من الحذف تستخدم صلاحية «مسؤول الجهاز» لمنع الحذف فقط، دون أي صلاحية أخرى.\n\nبالضغط على «موافق» فأنت توافق على ذلك.", "• Uninstall protection uses the Device admin permission only to prevent uninstalling, nothing else.\n\nBy tapping \"Agree\" you accept this."))
             .setPositiveButton(L.t("موافق", "Agree"), new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, int w) {
                 sp.edit().putBoolean("disclosed", true).apply(); } })
@@ -429,7 +429,7 @@ public class MainActivity extends Activity {
 
     private void about() {
         new AlertDialog.Builder(this).setTitle(L.t("عن درع العفّة", "About Iffah Shield"))
-            .setMessage(L.t("تطبيق مجاني ومفتوح المصدر، صدقة جارية لحماية الشباب والفتيات من الإباحية.\n\n", "A free, open-source app, made as ongoing charity to protect young people from pornography.\n\n")
+            .setMessage(L.t("تطبيق مجاني ومفتوح المصدر، صدقة جارية لحماية الشباب والفتيات من غير اللائقة.\n\n", "A free, open-source app, made as ongoing charity to protect young people from harmful content.\n\n")
                 + L.t("• بلا إنترنت، بلا إعلانات، بلا اشتراكات، بلا جمع بيانات.\n• يحجب الكلمات والمواقع والريلز والشورتس والتصفح المتخفي.\n", "• No internet, no ads, no subscriptions, no data collection.\n• Blocks words, sites, Reels, Shorts and incognito browsing.\n")
                 + L.t("• وضع صارم وحماية من الحذف وزر طوارئ.\n\nإن نفعك فادعُ لمن صنعه، وانشره لغيرك فالدال على الخير كفاعله.", "• Strict mode, uninstall protection and an emergency button.\n\nIf it helps you, make dua for whoever made it, and share it: whoever guides to good gets its reward."))
             .setPositiveButton(L.t("حسناً", "OK"), null).show();
