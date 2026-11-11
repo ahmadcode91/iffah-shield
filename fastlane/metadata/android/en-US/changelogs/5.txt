@@ -1,0 +1,6 @@
+• Important fix: Chrome was sometimes blocked by mistake as if it were in incognito. Fixed; real incognito is still blocked.
+• 550+ new blocked words and phrases in 25+ languages, including AI tools that generate indecent images.
+• Floating video (picture-in-picture) of blocked apps is now closed.
+• Tamper log: any stop of the protection service is recorded.
+• Daily self-check after the evening adhkar, plus your riskiest hour.
+• Everything from 1.1: adhkar, recovery plan, night lock, forced safe search, kids mode, English UI.

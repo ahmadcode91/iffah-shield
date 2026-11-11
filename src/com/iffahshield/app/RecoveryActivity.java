@@ -108,6 +108,30 @@ public class RecoveryActivity extends Activity {
         content.addView(Ui.gap(this, 12));
         content.addView(medals(this, s));
 
+        // ---- daily self check ----
+        LinearLayout cc = Ui.card(this);
+        cc.addView(Ui.text(this, L.t("محاسبة اليوم", "Today's self-check"), 17, Ui.TEXT, true));
+        cc.addView(Ui.text(this, L.t("آخر 14 يوماً:  ", "Last 14 days:  ") + s.lastDays(14), 15, Ui.TEXT, false));
+        int ci = s.checkinToday();
+        if (ci >= 0) cc.addView(Ui.text(this, ci == 0 ? L.t("اليوم: نظيف 🟢 الحمد لله.", "Today: clean 🟢 Alhamdulillah.") : ci == 1 ? L.t("اليوم: قاومت وانتصرت 💪", "Today: you resisted and won 💪") : L.t("اليوم: وقعت ثم رجعت 🔴 والتوبة تمحو ما قبلها.", "Today: you slipped and came back 🔴 Repentance wipes it away."), 14, Ui.MUTED, false));
+        else {
+            cc.addView(Ui.text(this, L.t("كيف كان يومك؟ أجب بصدق، بينك وبين الله.", "How was your day? Answer honestly, between you and Allah."), 14, Ui.MUTED, false));
+            String[] labels = { L.t("نظيف 🟢", "Clean 🟢"), L.t("جاءتني رغبة وقاومتها 💪", "I had an urge and resisted 💪"), L.t("وقعت 🔴", "I slipped 🔴") };
+            for (int i = 0; i < 3; i++) {
+                final int v = i;
+                Button cb = Ui.button(this, labels[i], i == 2 ? Ui.alpha(Ui.DANGER, 60) : Ui.ACCENT_DARK, Ui.TEXT);
+                cb.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View x) {
+                    s.setCheckin(v);
+                    if (v == 1) s.logUrgeWon();
+                    if (v == 2) slipFlow(); else render();
+                } });
+                cc.addView(cb);
+            }
+        }
+        int rh = s.riskyHour();
+        if (rh >= 0) cc.addView(Ui.text(this, L.t("\n⏰ أخطر وقت عندك حسب سجلّك: حوالي الساعة ", "\n⏰ Your riskiest time by your own log: around ") + rh + L.t(":00. استعد قبله: الهاتف بعيد، وضوء، وعمل آخر.", ":00. Prepare before it: phone away, wudu, something else to do."), 14, Ui.DANGER, false));
+        content.addView(cc);
+
         String[] trig = Store.triggers();
         LinearLayout tc = Ui.card(this);
         tc.addView(Ui.text(this, L.t("ما الذي يحرّكك أكثر؟", "What triggers you most?"), 17, Ui.TEXT, true));

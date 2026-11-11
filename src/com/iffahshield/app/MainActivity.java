@@ -147,6 +147,15 @@ public class MainActivity extends Activity {
         content.addView(Ui.gap(this, 12));
         content.addView(RecoveryActivity.medals(this, s));
 
+        // ---- tamper log ----
+        if (s.tamperLog().length() > 0) {
+            LinearLayout tl = Ui.card(this);
+            tl.addView(Ui.text(this, L.t("🚨 سجل العبث (", "🚨 Tamper log (") + s.tamperCount() + ")", 17, Ui.DANGER, true));
+            tl.addView(Ui.text(this, L.t("كل مرة توقفت فيها الحماية والهاتف يعمل تُسجَّل هنا ولا تُمسح. شريك المحاسبة يستطيع رؤيتها.", "Every time protection stopped while the phone was in use is recorded here and cannot be cleared. Your accountability partner can see it."), 12, Ui.MUTED, false));
+            tl.addView(Ui.text(this, s.tamperLog(), 13, Ui.TEXT, false));
+            content.addView(tl);
+        }
+
         // ---- adhkar + recovery ----
         LinearLayout dz = Ui.card(this);
         dz.addView(Ui.text(this, L.t("الأذكار والتعافي", "Adhkar & recovery"), 18, Ui.TEXT, true));
@@ -198,7 +207,7 @@ public class MainActivity extends Activity {
         // ---- lists ----
         LinearLayout lists = Ui.card(this);
         lists.addView(Ui.text(this, L.t("القوائم", "Lists"), 18, Ui.TEXT, true));
-        Button kw = Ui.button(this, L.t("الكلمات المحظورة (", "Blocked words (") + (BuiltinWords.LIST.length + s.keywords().size()) + ")", Ui.ACCENT_DARK, Ui.TEXT);
+        Button kw = Ui.button(this, L.t("الكلمات المحظورة (", "Blocked words (") + ((BuiltinWords.LIST.length + BuiltinWords2.LIST.length) + s.keywords().size()) + ")", Ui.ACCENT_DARK, Ui.TEXT);
         kw.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { editKeywords(); } });
         lists.addView(kw);
         Button ap = Ui.button(this, L.t("التطبيقات المحظورة (", "Blocked apps (") + s.apps().size() + ")", Ui.ACCENT_DARK, Ui.TEXT);
@@ -592,8 +601,8 @@ public class MainActivity extends Activity {
             items[i] = w.startsWith("=") ? w.substring(1) + L.t("  (كلمة كاملة)", "  (whole word)") : w;
         }
         AlertDialog.Builder b = new AlertDialog.Builder(this)
-            .setTitle(items.length == 0 ? L.t("يوجد ", "There are ") + BuiltinWords.LIST.length + L.t(" كلمة مدمجة (مخفية لحمايتك). أضف كلماتك:", " built-in words (hidden for your protection). Add your own:")
-                                        : L.t("كلماتك (+", "Your words (+") + BuiltinWords.LIST.length + L.t(" كلمة مدمجة مخفية)", " hidden built-in)"))
+            .setTitle(items.length == 0 ? L.t("يوجد ", "There are ") + (BuiltinWords.LIST.length + BuiltinWords2.LIST.length) + L.t(" كلمة مدمجة (مخفية لحمايتك). أضف كلماتك:", " built-in words (hidden for your protection). Add your own:")
+                                        : L.t("كلماتك (+", "Your words (+") + (BuiltinWords.LIST.length + BuiltinWords2.LIST.length) + L.t(" كلمة مدمجة مخفية)", " hidden built-in)"))
             .setItems(items, new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, final int i) {
                 if (s.isStrict()) { toast(L.t("لا يمكن حذف الكلمات في الوضع الصارم.", "Words can't be removed in strict mode.")); return; }
                 new AlertDialog.Builder(MainActivity.this).setMessage(L.t("هل تحذف «", "Remove \"") + items[i] + L.t("»؟", "\"?"))

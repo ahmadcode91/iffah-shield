@@ -88,15 +88,17 @@ public class GuardService extends AccessibilityService {
         "uninstall", "force stop", "disable", "remove" };
     private static final String[] SETTINGS_TERMS = {
         "dns خاص", "dns الخاص", "private dns",
-        "حظر الاتصالات من دون vpn", "تشغيل vpn دائما", "always-on vpn", "block connections without vpn",
+        "حظر الاتصالات من دون vpn", "تشغيل vpn دايما", "always-on vpn", "block connections without vpn",
         "اعاده ضبط بيانات المصنع", "factory data reset",
         "المجلد الامن", "secure folder", "الماسنجر المزدوج", "dual messenger",
         "اضافه ضيف", "add guest", "اضافه مستخدم", "add user",
-        "التاريخ والوقت التلقائي", "تعيين الوقت", "تعيين التاريخ", "automatic date and time" };
+        "التاريخ والوقت التلقايي", "تعيين الوقت", "تعيين التاريخ", "automatic date and time" };
     private static final String[] INCOGNITO = {
-        "وضع التصفح المتخفي", "اصبحت في وضع التصفح المتخفي", "انتقلت الى وضع التصفح المتخفي",
+        "تبويب في وضع التصفح المتخفي", "في \"وضع التصفح المتخفي\"",   // incognito tabs / tab switcher in incognito
+        // (not the bare phrase: normal Chrome shows it in hints and "new incognito tab" buttons)
+        "اصبحت في وضع التصفح المتخفي", "انتقلت الي وضع التصفح المتخفي",
         "you've gone incognito", "you’ve gone incognito", "incognito mode", "secret mode is on",
-        "الوضع السري قيد التشغيل", "private browsing mode", "ntp_incognito_marker" };
+        "الوضع السري قيد التشغيل", "انت في الوضع السري", "ايقاف تشغيل الوضع السري", "turn off secret mode", "private browsing mode", "ntp_incognito_marker" };
 
     private static final String[][] REEL_IDS = {
         { "com.instagram.android", "com.instagram.android:id/clips_viewer_view_pager" },
@@ -127,6 +129,7 @@ public class GuardService extends AccessibilityService {
         @Override public void run() {
             if (store.tick()) toast(L.t("انتهت مهلة الـ24 ساعة، وتم إيقاف الوضع الصارم.", "The 24 hours are over; strict mode is now off."));
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            store.heartbeat(pm == null || pm.isInteractive());
             if (pm != null && !pm.isInteractive()) setForeground(null);
             else {
                 L.init(GuardService.this);
@@ -173,6 +176,7 @@ public class GuardService extends AccessibilityService {
 
     @Override protected void onServiceConnected() {
         store = new Store(this);
+        store.checkGap();
         running = true;
         DisplayMetrics m = getResources().getDisplayMetrics();
         screenW = m.widthPixels; screenH = m.heightPixels;
@@ -447,7 +451,10 @@ public class GuardService extends AccessibilityService {
             if (ws != null) for (AccessibilityWindowInfo w : ws) {
                 if (w.getType() == AccessibilityWindowInfo.TYPE_APPLICATION) {
                     AccessibilityNodeInfo r = w.getRoot();
-                    if (r != null) { roots.add(r); active.add(w.isActive() || w.isFocused()); }
+                    if (r != null) {
+                        if (isPip(w)) { guardPip(r); r.recycle(); }   // floating video: handled apart, BACK/HOME can't reach it
+                        else { roots.add(r); active.add(w.isActive() || w.isFocused()); }
+                    }
                 }
                 w.recycle();
             }
@@ -524,7 +531,7 @@ public class GuardService extends AccessibilityService {
             String t = Matcher.normalize(collect(root, browser ? 1200 : 700, browser));
             if (matcher.find(t) != null) {
                 if (browser) blockBrowser(pkg, "words", L.t("تم حجب محتوى غير لائق.", "Inappropriate content was blocked."));
-                else block("words", L.t("تم حجب محتوى غير لائق.", "Inappropriate content was blocked."), !soloActive);
+                else { lastBlockPkg = pkg; lastBlockAt = SystemClock.uptimeMillis(); block("words", L.t("تم حجب محتوى غير لائق.", "Inappropriate content was blocked."), !soloActive); }
                 return true;
             }
         }
@@ -694,7 +701,40 @@ public class GuardService extends AccessibilityService {
     }
 
     /** Leave the bad page (BACK), then open a clean page in the same browser so it never reopens on it. */
+    // ---------- picture-in-picture: a blocked app must not keep playing in a floating window ----------
+    private static java.lang.reflect.Method pipMethod;
+    private static boolean pipLooked = false;
+    private String lastBlockPkg = null;
+    private long lastBlockAt = 0, pipAt = 0;
+
+    private static boolean isPip(AccessibilityWindowInfo w) {
+        try {
+            if (!pipLooked) { pipLooked = true; pipMethod = AccessibilityWindowInfo.class.getMethod("isInPictureInPictureMode"); }
+            return pipMethod != null && Boolean.TRUE.equals(pipMethod.invoke(w));
+        } catch (Throwable t) { return false; }
+    }
+
+    private void guardPip(AccessibilityNodeInfo root) {
+        CharSequence rp = root.getPackageName();
+        if (rp == null) return;
+        String pkg = rp.toString();
+        if (inCall() || isExempt(pkg) || pkg.equals(getPackageName())) return;
+        long now = SystemClock.uptimeMillis();
+        boolean bad = store.apps().contains(pkg) || store.overLimit(pkg)
+            || (store.inLockdown() && !LOCKDOWN_ALLOW.contains(pkg))
+            || (store.inNightLock() && !LOCKDOWN_ALLOW.contains(pkg) && !NIGHT_ALLOW.contains(pkg))
+            || (pkg.equals(lastBlockPkg) && now - lastBlockAt < 60_000)
+            || store.adhkarDue() != null;
+        if (!bad || now - pipAt < 800) return;
+        pipAt = now;
+        boolean ok = root.performAction(0x00100000 /* ACTION_DISMISS */);
+        if (!ok) root.performAction(0x00040000 /* ACTION_EXPAND: back to full screen, where normal blocking closes it */);
+        store.countBlock("pip");
+        toast(L.t("الفيديو العائم محظور 🛡", "Floating video blocked 🛡"));
+    }
+
     private void blockBrowser(String pkg, String category, String reason) {
+        lastBlockPkg = pkg; lastBlockAt = SystemClock.uptimeMillis();
         coolUntil = SystemClock.uptimeMillis() + 1500;
         store.countBlock(category);
         performGlobalAction(GLOBAL_ACTION_BACK);

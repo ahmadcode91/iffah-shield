@@ -92,6 +92,7 @@ public final class Store {
     /** Built-in hidden list + the user's words: what the matcher actually uses. */
     public List<String> allWords() {
         List<String> a = new ArrayList<String>(Arrays.asList(BuiltinWords.LIST));
+        a.addAll(Arrays.asList(BuiltinWords2.LIST));
         a.addAll(keywords());
         return a;
     }
@@ -296,6 +297,55 @@ public final class Store {
     // ---------- stats (counts only, never content) ----------
     private static String today() { return new SimpleDateFormat("yyyyMMdd", Locale.US).format(new Date()); }
 
+    // ---------- tamper log: times the guard service was off while the phone was in use ----------
+    public void heartbeat(boolean interactive) {
+        p.edit().putLong("aliveWall", System.currentTimeMillis()).putBoolean("aliveAwake", interactive).putInt("aliveBoot", boot()).apply();
+    }
+    /** Called when the guard service (re)starts. Logs the gap if it died while the screen was on. */
+    public void checkGap() {
+        long last = p.getLong("aliveWall", 0), now = System.currentTimeMillis();
+        int b = boot();
+        if (last > 0 && p.getBoolean("aliveAwake", false) && b != -1 && b == p.getInt("aliveBoot", -2) && now - last > 3 * 60_000L)
+            logTamper(L.t("خدمة الحماية كانت متوقفة ", "The protection service was off for ") + ((now - last) / 60_000L) + L.t(" دقيقة", " min"));
+        heartbeat(true);
+    }
+    public void logTamper(String msg) {
+        String line = new SimpleDateFormat("MM-dd HH:mm", Locale.US).format(new Date()) + "  " + msg;
+        String all = p.getString("tamperLog", "");
+        if (all.startsWith(line)) return;
+        String[] old = all.length() == 0 ? new String[0] : all.split("\n");
+        StringBuilder sb = new StringBuilder(line);
+        for (int i = 0; i < old.length && i < 19; i++) sb.append('\n').append(old[i]);
+        p.edit().putString("tamperLog", sb.toString()).putInt("tamperCount", p.getInt("tamperCount", 0) + 1).apply();
+    }
+    public String tamperLog() { return p.getString("tamperLog", ""); }
+    public int tamperCount() { return p.getInt("tamperCount", 0); }
+
+    // ---------- daily self check ----------
+    /** 0 = clean day, 1 = fought an urge and won, 2 = slipped; -1 = not answered. */
+    public int checkin(String day) { return p.getInt("ci:" + day, -1); }
+    public int checkinToday() { return checkin(today()); }
+    public void setCheckin(int v) { p.edit().putInt("ci:" + today(), v).apply(); }
+    public String lastDays(int n) {
+        StringBuilder sb = new StringBuilder();
+        SimpleDateFormat f = new SimpleDateFormat("yyyyMMdd", Locale.US);
+        for (int i = n - 1; i >= 0; i--) {
+            int v = checkin(f.format(new Date(System.currentTimeMillis() - i * 86400000L)));
+            sb.append(v == 0 ? "🟢" : v == 1 ? "💪" : v == 2 ? "🔴" : "⚪");
+        }
+        return sb.toString();
+    }
+    public void logUrgeHour() {
+        int hr = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        p.edit().putInt("uh:" + hr, p.getInt("uh:" + hr, 0) + 1).apply();
+    }
+    /** The hour of day with most urges, or -1 while there is too little data. */
+    public int riskyHour() {
+        int best = -1, max = 0, total = 0;
+        for (int i = 0; i < 24; i++) { int c = p.getInt("uh:" + i, 0); total += c; if (c > max) { max = c; best = i; } }
+        return total >= 3 ? best : -1;
+    }
+
     public void countBlock(String category) {
         String t = today();
         int todayCount = t.equals(p.getString("todayDate", "")) ? p.getInt("today", 0) : 0;
@@ -402,7 +452,7 @@ public final class Store {
     public static final String[] TRIGGERS_AR = { "ملل/فراغ", "وحدة", "تعب/نعاس", "توتر/حزن", "في السرير/الليل", "صورة أو مقطع رأيته" };
     public static final String[] TRIGGERS_EN = { "Boredom", "Loneliness", "Tiredness", "Stress/sadness", "In bed/at night", "Something I saw" };
     public static String[] triggers() { return L.en ? TRIGGERS_EN : TRIGGERS_AR; }
-    public void logTrigger(int i) { p.edit().putInt("trig_" + i, p.getInt("trig_" + i, 0) + 1).apply(); }
+    public void logTrigger(int i) { logUrgeHour(); p.edit().putInt("trig_" + i, p.getInt("trig_" + i, 0) + 1).apply(); }
     public int trigger(int i) { return p.getInt("trig_" + i, 0); }
     public void logUrgeWon() { p.edit().putInt("urgesWon", p.getInt("urgesWon", 0) + 1).apply(); }
     public int urgesWon() { return p.getInt("urgesWon", 0); }
