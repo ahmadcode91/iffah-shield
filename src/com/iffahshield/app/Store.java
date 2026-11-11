@@ -76,7 +76,7 @@ public final class Store {
         return out;
     }
 
-    public boolean flag(String k) { return p.getBoolean(k, false); }
+    public boolean flag(String k) { return p.getBoolean(k, "images".equals(k)); }   // image guard is on by default
 
     /** Turning a protection OFF is refused while strict mode is on. */
     public boolean setFlag(String k, boolean v) {
@@ -320,6 +320,14 @@ public final class Store {
     }
     public String tamperLog() { return p.getString("tamperLog", ""); }
     public int tamperCount() { return p.getInt("tamperCount", 0); }
+
+    // ---------- 40-day journey ----------
+    public int journeyDay() { return p.getInt("journeyDay", 0); }
+    public boolean journeyDoneToday() { return today().equals(p.getString("journeyDate", "")); }
+    public void completeJourney() {
+        if (journeyDoneToday()) return;
+        p.edit().putInt("journeyDay", Math.min(Journey.DAYS.length, journeyDay() + 1)).putString("journeyDate", today()).apply();
+    }
 
     // ---------- daily self check ----------
     /** 0 = clean day, 1 = fought an urge and won, 2 = slipped; -1 = not answered. */

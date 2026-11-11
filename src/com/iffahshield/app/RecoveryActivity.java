@@ -108,6 +108,31 @@ public class RecoveryActivity extends Activity {
         content.addView(Ui.gap(this, 12));
         content.addView(medals(this, s));
 
+        // ---- 40-day journey (Arabic content) ----
+        if (!L.en) {
+            LinearLayout jc = Ui.card(this);
+            int done = s.journeyDay();
+            boolean today = s.journeyDoneToday();
+            int idx = Math.min(Journey.DAYS.length - 1, today ? Math.max(0, done - 1) : done);
+            String[] day = Journey.DAYS[idx];
+            jc.addView(Ui.text(this, "رحلة الحرية: اليوم " + (idx + 1) + " من " + Journey.DAYS.length, 17, Ui.ACCENT, true));
+            jc.addView(Ui.text(this, day[0], 19, Ui.TEXT, true));
+            jc.addView(Ui.text(this, day[1], 15, Ui.TEXT, false));
+            jc.addView(Ui.text(this, "\n🎯 مهمة اليوم: " + day[2], 15, Ui.ACCENT, false));
+            if (done >= Journey.DAYS.length && today) jc.addView(Ui.text(this, "\nأتممت الأربعين 🏆 ثبّتك الله.", 15, Ui.ACCENT, true));
+            else if (today) jc.addView(Ui.text(this, "\n✅ أنهيت مهمة اليوم. غداً مهمة جديدة.", 14, Ui.MUTED, false));
+            else {
+                Button jb = Ui.button(this, "أنهيت مهمة اليوم ✅", Ui.ACCENT_DARK, Ui.TEXT);
+                jb.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) {
+                    s.completeJourney();
+                    Toast.makeText(RecoveryActivity.this, "بارك الله فيك 🤍 خطوة جديدة نحو الحرية.", Toast.LENGTH_SHORT).show();
+                    render();
+                } });
+                jc.addView(jb);
+            }
+            content.addView(jc);
+        }
+
         // ---- daily self check ----
         LinearLayout cc = Ui.card(this);
         cc.addView(Ui.text(this, L.t("محاسبة اليوم", "Today's self-check"), 17, Ui.TEXT, true));

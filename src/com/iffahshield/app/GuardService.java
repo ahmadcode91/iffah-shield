@@ -157,6 +157,69 @@ public class GuardService extends AccessibilityService {
         }
     };
 
+    // ---------- image guard: looks at the screen itself, so wordless (e.g. AI-generated) nudity is caught too ----------
+    static volatile String imageInfo = "-";
+    private ImageGuard img;
+    private static final Set<String> IMAGE_SKIP = new HashSet<String>(Arrays.asList(
+        "com.iffahshield.app", "com.termux", "com.android.systemui", "com.sec.android.app.launcher", "com.android.settings",
+        "com.android.phone", "com.samsung.android.dialer", "com.google.android.dialer", "com.android.dialer",
+        "com.samsung.android.incallui", "com.android.incallui", "com.android.server.telecom", "com.android.emergency",
+        "com.samsung.android.honeyboard", "com.google.android.inputmethod.latin", "com.sec.android.app.camera",
+        "ch.protonvpn.android", "com.sec.android.app.clockpackage"));
+    private final Runnable imageLoop = new Runnable() {
+        @Override public void run() {
+            long next = 1500;
+            try {
+                PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                if (img != null && store.flag("images") && !store.isPaused() && (pm == null || pm.isInteractive()) && !inCall()
+                        && SystemClock.uptimeMillis() >= coolUntil) {
+                    AccessibilityNodeInfo r = getRootInActiveWindow();
+                    if (r != null) {
+                        CharSequence rp = r.getPackageName();
+                        if (rp != null && !IMAGE_SKIP.contains(rp.toString())) img.scan(rp.toString(), imageRects(r));
+                        r.recycle();
+                    }
+                    imageInfo = img.lastInfo;
+                } else next = 3000;
+            } catch (Exception ignored) { }
+            h.postDelayed(this, next);
+        }
+    };
+    /** Frames of the pictures / videos visible on screen (largest first, at most 12). */
+    private List<Rect> imageRects(AccessibilityNodeInfo root) {
+        final List<Rect> out = new ArrayList<Rect>();
+        ArrayDeque<AccessibilityNodeInfo> q = new ArrayDeque<AccessibilityNodeInfo>();
+        q.add(AccessibilityNodeInfo.obtain(root));
+        int n = 0;
+        while (!q.isEmpty()) {
+            AccessibilityNodeInfo x = q.poll();
+            if (n++ < 700) {
+                CharSequence cls = x.getClassName();
+                String c = cls == null ? "" : cls.toString();
+                if (x.isVisibleToUser() && (c.contains("Image") || c.contains("Video") || c.contains("SurfaceView") || c.contains("TextureView"))) {
+                    Rect b = new Rect();
+                    x.getBoundsInScreen(b);
+                    if (b.width() >= 160 && b.height() >= 160 && b.width() < b.height() * 4 && b.height() < b.width() * 4) out.add(b);
+                }
+                for (int i = 0; i < x.getChildCount(); i++) {
+                    AccessibilityNodeInfo ch = x.getChild(i);
+                    if (ch != null) q.add(ch);
+                }
+            }
+            x.recycle();
+        }
+        java.util.Collections.sort(out, new java.util.Comparator<Rect>() {
+            @Override public int compare(Rect a, Rect b) { return b.width() * b.height() - a.width() * a.height(); } });
+        return out.size() > 12 ? new ArrayList<Rect>(out.subList(0, 12)) : out;
+    }
+
+    private void onNudity(String pkg, String kind, float score) {
+        if (store.isPaused() || inCall()) return;
+        lastBlockPkg = pkg; lastBlockAt = SystemClock.uptimeMillis();
+        if (BROWSERS.contains(pkg)) blockBrowser(pkg, "image", L.t("تم حجب صورة غير لائقة 👁", "An indecent image was blocked 👁"));
+        else block("image", L.t("تم حجب صورة غير لائقة 👁", "An indecent image was blocked 👁"), true);
+    }
+
     private final BroadcastReceiver pkgReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
             if (i.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return;
@@ -187,6 +250,12 @@ public class GuardService extends AccessibilityService {
         try { registerReceiver(pkgReceiver, f); } catch (Exception ignored) { }
         L.init(this);
         h.postDelayed(new Runnable() { @Override public void run() { blockUnknownBrowsers(); } }, 5000);
+        try {
+            if (img == null) img = new ImageGuard(this, new ImageGuard.Listener() {
+                @Override public void onNudity(String pkg, String kind, float score) { GuardService.this.onNudity(pkg, kind, score); } });
+        } catch (Throwable t) { imageInfo = "init failed: " + t; }
+        h.removeCallbacks(imageLoop);
+        h.postDelayed(imageLoop, 4000);
     }
 
     // ---------- browsers the app doesn't know: blocked, so they can't be used to slip past ----------
@@ -357,6 +426,8 @@ public class GuardService extends AccessibilityService {
     @Override public void onDestroy() {
         running = false;
         h.removeCallbacks(ticker);
+        h.removeCallbacks(imageLoop);
+        if (img != null) { img.stop(); img = null; }
         try { unregisterReceiver(pkgReceiver); } catch (Exception ignored) { }
         setForeground(null);
         super.onDestroy();
