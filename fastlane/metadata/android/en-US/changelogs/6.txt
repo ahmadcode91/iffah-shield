@@ -1,0 +1,1 @@
+• Fix: forced safe search closed some Google pages that are not searches.
