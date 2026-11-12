@@ -370,7 +370,8 @@ public class GuardService extends AccessibilityService {
         String host = u.getHost() == null ? "" : u.getHost().toLowerCase(java.util.Locale.US);
         String path = u.getPath() == null ? "" : u.getPath();
         String key = null, val = null;
-        if ((host.startsWith("google.") || host.contains(".google.")) && (path.startsWith("/search") || path.startsWith("/imgres"))) { key = "safe"; val = "active"; }
+        if ((host.startsWith("google.") || host.contains(".google.")) && (path.equals("/search") || path.equals("/imgres"))
+                && !host.startsWith("search.google.")) { key = "safe"; val = "active"; }
         else if (host.endsWith("bing.com") && (path.startsWith("/search") || path.startsWith("/images") || path.startsWith("/videos"))) { key = "adlt"; val = "strict"; }
         else if (host.endsWith("duckduckgo.com") && u.getQueryParameter("q") != null) { key = "kp"; val = "1"; }
         else if (host.startsWith("search.yahoo.") || host.startsWith("images.search.yahoo.") || host.startsWith("video.search.yahoo.")) { key = "vm"; val = "r"; }
