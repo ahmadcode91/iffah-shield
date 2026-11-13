@@ -1,0 +1,1 @@
+• Improvement: image detection confirms with a second look before blocking, so normal videos no longer close by mistake.

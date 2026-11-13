@@ -180,6 +180,7 @@ public class GuardService extends AccessibilityService {
                         r.recycle();
                     }
                     imageInfo = img.lastInfo;
+                    if (img.pending) next = 1100;   // confirm a suspected frame quickly
                 } else next = 3000;
             } catch (Exception ignored) { }
             h.postDelayed(this, next);

@@ -31,6 +31,12 @@ final class ImageGuard {
     static final int SIZE = 224;
     // Thresholds: explicit content blocks alone; "sexy" needs a higher score.
     static final float T_PORN = 0.80f, T_HENTAI = 0.85f, T_SEXY = 0.90f;
+    // Thresholds stay as they are. But one frame alone can fool the model (a normal video scored 86% once),
+    // so unless a hit is near-certain, the very next look at the screen (about a second later) must agree.
+    static final float T_SURE = 0.97f;
+    private String pendingPkg = null;
+    private long pendingAt = 0;
+    volatile boolean pending = false;
 
     private final AccessibilityService svc;
     private final Listener listener;
@@ -141,10 +147,19 @@ final class ImageGuard {
                 + " " + pkg + " porn=" + pct(bestP) + " hentai=" + pct(bestH) + " sexy=" + pct(bestS)
                 + " imgs=" + exact + " tiles=" + tiles.size() + " ms=" + (System.currentTimeMillis() - t0) + (kind != null ? " HIT " + kind : "");
             if (kind != null) {
-                lastHash = 0;
-                final String k = kind; final float sc = score;
-                main.post(new Runnable() { @Override public void run() { listener.onNudity(pkg, k, sc); } });
-            }
+                lastHash = 0;   // look again next time even if the screen did not change
+                long now = System.currentTimeMillis();
+                boolean sure = !"sexy".equals(kind) && score >= T_SURE;
+                boolean confirmed = pkg.equals(pendingPkg) && now - pendingAt < 5000;
+                if (sure || confirmed) {
+                    pendingPkg = null; pending = false;
+                    final String k = kind; final float sc = score;
+                    main.post(new Runnable() { @Override public void run() { listener.onNudity(pkg, k, sc); } });
+                } else {
+                    pendingPkg = pkg; pendingAt = now; pending = true;
+                    lastInfo += " (waiting for 2nd look)";
+                }
+            } else { pendingPkg = null; pending = false; }
         } finally { sw.recycle(); }
     }
 
