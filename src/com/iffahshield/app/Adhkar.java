@@ -82,6 +82,26 @@ final class Adhkar {
         { "اللهم صلِّ وسلم على نبينا محمد.", "10", "رواه الطبراني" },
     };
 
+    /** The protection wird (a common protection wird), read after both morning and evening adhkar. Quran from Tanzil. */
+    static String[][] wird(android.content.Context c) {
+        String aoudh = "أعوذ بالله من الشيطان الرجيم\n";
+        return new String[][] {
+            { Quran.verses(c, 1, 1, 1), "21", "البسملة" },
+            { aoudh + Quran.verses(c, 2, 255, 255), "11", "آية الكرسي، البقرة ٢٥٥" },
+            { Quran.verses(c, 112, 1, 4), "3", "سورة الإخلاص" },
+            { Quran.verses(c, 113, 1, 5), "3", "سورة الفلق" },
+            { Quran.verses(c, 114, 1, 6), "3", "سورة الناس" },
+            { aoudh + Quran.verses(c, 7, 200, 200), "1", "الأعراف ٢٠٠" },
+            { "أعوذ بوجه الله العظيم، الذي ليس شيء أعظم منه، وبكلمات الله التامات التي لا يجاوزهن برٌّ ولا فاجر، "
+                + "وبأسماء الله الحسنى كلها ما علمتُ منها وما لم أعلم، من شر ما خلق وبرأ وذرأ.", "1", "دعاء التحصين" },
+            { aoudh + Quran.verses(c, 23, 97, 98), "7", "المؤمنون ٩٧-٩٨" },
+            { aoudh + Quran.verses(c, 17, 45, 46), "1", "الإسراء ٤٥-٤٦" },
+            { aoudh + Quran.verses(c, 9, 129, 129), "7", "التوبة ١٢٩" },
+            { "بسم الله الذي لا يضر مع اسمه شيء في الأرض ولا في السماء، وهو السميع العليم.", "3", "رواه أبو داود والترمذي" },
+            { aoudh + Quran.verses(c, 59, 21, 24), "1", "الحشر ٢١-٢٤" },
+        };
+    }
+
     static String[][] of(String session) { return "m".equals(session) ? MORNING : EVENING; }
     static String title(String session) { return "m".equals(session) ? L.t("أذكار الصباح ☀️", "Morning adhkar ☀️") : L.t("أذكار المساء 🌙", "Evening adhkar 🌙"); }
 }

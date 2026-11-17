@@ -102,7 +102,7 @@ public class MainActivity extends Activity {
         content.addView(Ui.gap(this, 14));
 
         // ---- setup checklist (public edition) ----
-        boolean dnsOn = "hostname".equals(Settings.Global.getString(getContentResolver(), "private_dns_mode"));
+        boolean dnsOn = GuardService.dnsOn(this);
         android.app.admin.DevicePolicyManager dpm0 = (android.app.admin.DevicePolicyManager) getSystemService(DEVICE_POLICY_SERVICE);
         boolean admin0 = dpm0 != null && dpm0.isAdminActive(AdminReceiver.component(this));
         int done = (on ? 1 : 0) + (notifOn() ? 1 : 0) + (admin0 ? 1 : 0) + (dnsOn ? 1 : 0) + (strict ? 1 : 0);
@@ -393,21 +393,49 @@ public class MainActivity extends Activity {
 
     static final String DNS_HOST = "family-filter-dns.cleanbrowsing.org";
 
+    private void copyDns() {
+        android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("dns", DNS_HOST));
+    }
+
+    private void openNetworkSettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS)
+                .putExtra(":settings:fragment_args_key", "private_dns_settings")   // highlights the row on stock Android
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+        } catch (Exception e) { startActivity(new Intent(Settings.ACTION_SETTINGS)); }
+    }
+
+    /** Step 4: one tap. The protection service walks Settings to Private DNS and fills the address itself. */
     private void dnsGuide() {
+        if (GuardService.dnsOn(this)) { toast(L.t("✅ الفلتر مفعّل.", "✅ The filter is on.")); return; }
         new AlertDialog.Builder(this).setTitle(L.t("فلتر المواقع غير اللائقة (مجاني)", "Adult-site filter (free)"))
-            .setMessage(L.t("هذا الفلتر يحجب آلاف المواقع غير اللائقة في كل الهاتف، ويفرض البحث الآمن في Google وYouTube، ويعمل حتى لو توقف التطبيق.\n\n", "This filter blocks thousands of adult sites across the whole phone, forces safe search on Google and YouTube, and works even if the app stops.\n\n")
-                + L.t("الخطوات:\n1. اضغط «نسخ العنوان».\n2. اضغط «فتح الإعدادات».\n3. ابحث في الإعدادات عن «DNS الخاص» (Private DNS).\n", "Steps:\n1. Tap \"Copy address\".\n2. Tap \"Open settings\".\n3. Search settings for \"Private DNS\".\n")
-                + L.t("4. اختر «اسم مضيف موفر DNS الخاص» والصق العنوان:\n\n", "4. Choose \"Private DNS provider hostname\" and paste the address:\n\n") + DNS_HOST + L.t("\n\n5. احفظ.\n\nالخدمة من CleanBrowsing، مجانية للعائلات.", "\n\n5. Save.\n\nThe service is from CleanBrowsing, free for families."))
-            .setPositiveButton(L.t("نسخ العنوان", "Copy address"), new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, int w) {
-                android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("dns", DNS_HOST));
-                toast(L.t("تم النسخ ✓ الآن افتح الإعدادات.", "Copied ✓ Now open settings."));
-                dnsGuide();
+            .setMessage(L.t("يحجب آلاف المواقع غير اللائقة في كل الهاتف، ويفرض البحث الآمن في Google وYouTube، ويعمل حتى لو توقف التطبيق.\n\n", "Blocks thousands of adult sites across the whole phone, forces safe search on Google and YouTube, and works even if the app stops.\n\n")
+                + L.t("اضغط «إعداد تلقائي»: سيفتح التطبيق الإعدادات ويصل إلى «DNS الخاص» ويكتب العنوان ويحفظه بنفسه. لا تلمس الشاشة حوالي 10 ثوانٍ.\n\nالخدمة من CleanBrowsing، مجانية للعائلات.",
+                      "Tap \"Set up for me\": the app opens Settings, finds Private DNS, types the address and saves it by itself. Don't touch the screen for about 10 seconds.\n\nThe service is from CleanBrowsing, free for families."))
+            .setPositiveButton(L.t("إعداد تلقائي ✨", "Set up for me ✨"), new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, int w) {
+                copyDns();
+                if (!serviceOn() || !GuardService.startDnsAssist()) {
+                    toast(L.t("فعّل الخطوة 1 (تشغيل الحماية) أولاً، أو استخدم الطريقة اليدوية.", "Turn on step 1 (protection) first, or use the manual way."));
+                    dnsManual();
+                    return;
+                }
+                toast(L.t("لحظات… لا تلمس الشاشة.", "One moment… don't touch the screen."));
+                openNetworkSettings();
             } })
-            .setNeutralButton(L.t("فتح الإعدادات", "Open settings"), new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, int w) {
-                try { startActivity(new Intent(Settings.ACTION_WIRELESS_SETTINGS)); }
-                catch (Exception e) { startActivity(new Intent(Settings.ACTION_SETTINGS)); }
-            } })
+            .setNeutralButton(L.t("طريقة يدوية", "Manual way"), new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, int w) { dnsManual(); } })
+            .setNegativeButton(L.t("إغلاق", "Close"), null).show();
+    }
+
+    private void dnsManual() {
+        copyDns();
+        new AlertDialog.Builder(this).setTitle(L.t("الطريقة اليدوية", "Manual way"))
+            .setMessage(L.t("نسخنا العنوان لك ✓\n\n", "We copied the address for you ✓\n\n")
+                + L.t("سامسونج: الإعدادات ← الاتصالات ← إعدادات اتصال إضافية ← DNS خاص\n", "Samsung: Settings → Connections → More connection settings → Private DNS\n")
+                + L.t("أجهزة أخرى: الإعدادات ← الشبكة والإنترنت ← DNS الخاص\n", "Other phones: Settings → Network & internet → Private DNS\n")
+                + L.t("(أو اكتب «DNS» في بحث الإعدادات)\n\n", "(or type \"DNS\" in Settings search)\n\n")
+                + L.t("اختر «اسم مضيف موفر DNS الخاص»، الصق العنوان، ثم «حفظ»:\n\n", "Choose \"Private DNS provider hostname\", paste the address, then Save:\n\n") + DNS_HOST)
+            .setPositiveButton(L.t("فتح الإعدادات", "Open settings"), new DialogInterface.OnClickListener() { @Override public void onClick(DialogInterface d, int w) { openNetworkSettings(); } })
             .setNegativeButton(L.t("إغلاق", "Close"), null).show();
     }
 

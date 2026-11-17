@@ -10,15 +10,15 @@ final class BuiltinWords2 {
         "undress ai", "undressai", "ai undress", "undresser", "undress app", "undress her", "nudify", "nudifier",
         "deepnude", "deep nude", "clothoff", "cloth off", "clothes remover", "remove clothes", "remove her clothes",
         "nsfw ai", "ai nsfw", "nsfw generator", "nsfw chat", "nsfw image", "nsfw art", "ai nude", "nude ai",
-        "nude generator", "naked ai", "ai naked", "sexy ai", "ai sexy", "ai hentai", "ai girlfriend nsfw",
-        "pornpen", "seduced.ai", "candy.ai", "crushon", "soulgen", "promptchan", "dreamgf", "spicychat",
+        "nude generator", "<naked ai", "ai naked", "sexy ai", "ai sexy", "ai hentai", "ai girlfriend nsfw",
+        "pornpen", "seduced.ai", "candy.ai", "crushon", "=soulgen", "promptchan", "dreamgf", "spicychat",
         "nsfw character", "uncensored image", "ازاله الملابس", "ازاله ملابس", "خلع الملابس بالذكاء",
         "تعريه الصور", "تعريه صور", "تعريه بالذكاء", "صور عاريه بالذكاء", "بنات بالذكاء الاصطناعي عاري",
 
         // ---------- more sites (names without "porn"/"xnxx" in them) ----------
-        "=beeg", "ixxx", "fuq.com", "tiava", "alohatube", "nudevista", "simpcity", "kemono.", "fikfap",
+        "=beeg", "ixxx", "fuq.com", "<tiava", "alohatube", "nudevista", "simpcity", "kemono.", "fikfap",
         "xxxtik", "sex4arab", "sexalarab", "xgroovy", "sexu.com", "bellesa", "lustery", "dirtyroulette",
-        "luckycrush", "=cam4", "imlive", "mydirtyhobby", "xhamsterlive", "tiktits", "nudogram", "bunkr",
+        "luckycrush", "=cam4", "<imlive", "mydirtyhobby", "xhamsterlive", "tiktits", "nudogram", "bunkr",
         "antarvasna", "savita bhabhi", "lolicon", "shotacon",
 
         // ---------- English: seduction / suggestive / acts ----------

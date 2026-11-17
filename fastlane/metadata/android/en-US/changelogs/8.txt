@@ -1,0 +1,7 @@
+• Fix: the word filter no longer blocks normal words that contain a banned word inside them (like computer, reputation), and is more accurate in Arabic.
+• Fix: normal pictures that were covered by mistake: the second engine now confirms before any action.
+• Improved: a second detection engine (NudeNet) that pinpoints exposed body parts, alongside the first one. (Requires Android 8+)
+• New: after the morning and evening adhkar: a protection wird, then a daily page of the Holy Quran (604 pages, with a completion counter).
+• New: immodest photos on social apps (LinkedIn too) are covered and skipped without closing the app.
+• New: one-tap setup for the phone-wide site filter (DNS): the app opens Settings, types the address and saves it for you.
+• Improved: on Facebook, Instagram, YouTube and TikTok, doubtful content is covered at once and skipped instead of closing the app. Sure hits, or 3 doubts in a row, still close it.

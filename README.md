@@ -9,7 +9,7 @@
 ## ⬇️ التحميل
 - [أحدث نسخة من صفحة الإصدارات (Releases)](../../releases/latest)
 - [موقع التطبيق](https://ahmadcode91.github.io/iffah-shield/)
-- الحجم أقل من 100 كيلوبايت، ويعمل على أندرويد 7 فما فوق.
+- يعمل على أندرويد 8 فما فوق، وكل الفحص داخل الهاتف دون إنترنت.
 
 ## ✨ المميزات
 - **حجب المواقع والكلمات غير اللائقة** في كل التطبيقات والمتصفحات، بأكثر من 1000 كلمة ونطاق مدمج، بالعربية والإنجليزية والفرانكو و10 لغات أخرى. القائمة مخفية داخل التطبيق.
@@ -72,3 +72,7 @@ License: GPL-3.0
 - [TensorFlow Lite](https://www.tensorflow.org/lite) runtime (`libs/`), Apache-2.0.
 - Image classifier model `assets/model.tflite`: an [open-source MobileNet v2 classifier](https://github.com/GantMan/nsfw_model) (224x224). See that repository for its license.
 - Building needs an `android.jar` of API 30 or newer: `ANDROID_JAR=/path/to/android.jar VC=5 VN=1.2.0 ./build.sh`.
+
+## Credits
+- Quran text: [Tanzil Project](https://tanzil.net) (Simple text, used verbatim).
+- Body-part detection: [NudeNet](https://github.com/notAI-tech/NudeNet) 320n model (AGPL-3.0), run with [ONNX Runtime](https://onnxruntime.ai) (MIT).

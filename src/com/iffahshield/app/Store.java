@@ -406,6 +406,14 @@ public final class Store {
             .putInt("adhkarTotal", p.getInt("adhkarTotal", 0) + 1).apply();
         pruneAdhkar();
     }
+    // ---------- daily Quran page (after the adhkar) ----------
+    public int quranPage() { return Math.max(1, Math.min(Quran.PAGES, p.getInt("quranPage", 1))); }
+    public int khatmaCount() { return p.getInt("khatma", 0); }
+    public void quranNext() {
+        int n = quranPage() + 1;
+        if (n > Quran.PAGES) p.edit().putInt("quranPage", 1).putInt("khatma", khatmaCount() + 1).apply();
+        else p.edit().putInt("quranPage", n).apply();
+    }
     public int adhkarTotal() { return p.getInt("adhkarTotal", 0); }
     public int adhkarPos(String key) { return p.getInt("dpos_" + key, 0); }
     public int adhkarCount(String key) { return p.getInt("dcnt_" + key, 0); }

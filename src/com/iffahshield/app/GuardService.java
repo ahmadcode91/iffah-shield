@@ -5,6 +5,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Color;
+import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Handler;
@@ -12,9 +14,13 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.util.DisplayMetrics;
+import android.view.Gravity;
+import android.view.View;
+import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayDeque;
@@ -29,6 +35,7 @@ import java.util.Set;
 public class GuardService extends AccessibilityService {
 
     static volatile boolean running = false;
+    static volatile GuardService self;
     static volatile long matcherVersion = 0;
 
     // Never scanned for keywords (our UI, terminal, keyboards, system UI, private chats, settings).
@@ -40,7 +47,9 @@ public class GuardService extends AccessibilityService {
         "com.iffahshield.app", "com.android.systemui", "com.sec.android.app.launcher",
         "com.samsung.android.honeyboard", "com.google.android.inputmethod.latin",
         "com.whatsapp", "com.whatsapp.w4b", "com.google.android.gm", "com.samsung.android.messaging",
-        "com.android.settings"));
+        "com.android.settings",
+        // Quran apps: Quranic words (e.g. «ولا تعرى», Taha 118) must never trip the word filter. Images are still scanned.
+        "com.quran.labs.androidquran", "com.greentech.quran", "com.mmmoussa.quran"));
 
     // Apps that must never be blocked or time-limited.
     static final Set<String> NEVER_BLOCK = new HashSet<String>(Arrays.asList(
@@ -214,11 +223,245 @@ public class GuardService extends AccessibilityService {
         return out.size() > 12 ? new ArrayList<Rect>(out.subList(0, 12)) : out;
     }
 
+    // ---------- one-tap DNS setup ----------
+    private long dnsAssistUntil = 0, dnsLastStep = 0, dnsDoneAt = -100000;
+    private final Set<String> dnsClicked = new HashSet<String>();
+    private boolean dnsFilled = false;
+
+    static boolean dnsOn(Context c) {
+        // Any provider hostname counts: someone may already use another family filter, and that screen stays locked too.
+        return "hostname".equals(android.provider.Settings.Global.getString(c.getContentResolver(), "private_dns_mode"));
+    }
+
+    /** Called by the app's "Set up automatically" button right before it opens Settings. */
+    static boolean startDnsAssist() {
+        GuardService s = self;
+        if (s == null || !running || dnsOn(s)) return false;
+        s.dnsAssistUntil = SystemClock.uptimeMillis() + 90000;
+        s.dnsClicked.clear();
+        s.dnsFilled = false;
+        s.h.postDelayed(s.dnsTimeout, 90500);
+        return true;
+    }
+
+    private final Runnable dnsTimeout = new Runnable() { @Override public void run() {
+        if (dnsAssistUntil == 0) return;
+        dnsAssistUntil = 0;
+        if (!dnsOn(GuardService.this)) toast(L.t("لم أجد الإعداد تلقائياً. ابحث في الإعدادات عن «DNS الخاص» والصق العنوان (منسوخ).",
+            "Couldn't find it automatically. Search Settings for \"Private DNS\" and paste the address (copied)."));
+    } };
+
+    private void dnsAssistStep() {
+        long now = SystemClock.uptimeMillis();
+        if (now - dnsLastStep < 450) { h.removeCallbacks(dnsRetry); h.postDelayed(dnsRetry, 500); return; }
+        dnsLastStep = now;
+        if (dnsOn(this)) {
+            dnsAssistUntil = 0;
+            dnsDoneAt = now;
+            toast(L.t("✅ تم تفعيل فلتر المواقع لكل الهاتف.", "✅ The phone-wide site filter is on."));
+            performGlobalAction(GLOBAL_ACTION_BACK);
+            return;
+        }
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return;
+        List<AccessibilityNodeInfo> all = new ArrayList<AccessibilityNodeInfo>();
+        ArrayDeque<AccessibilityNodeInfo> q = new ArrayDeque<AccessibilityNodeInfo>();
+        q.add(root);
+        while (!q.isEmpty() && all.size() < 700) {
+            AccessibilityNodeInfo x = q.poll();
+            all.add(x);
+            for (int i = 0; i < x.getChildCount(); i++) { AccessibilityNodeInfo c = x.getChild(i); if (c != null) q.add(c); }
+        }
+        // 1) The Private DNS dialog itself: pick "hostname", fill the address, save.
+        AccessibilityNodeInfo edit = null, host = null, save = null;
+        for (AccessibilityNodeInfo n : all) {
+            CharSequence cls = n.getClassName();
+            if (cls != null && cls.toString().endsWith("EditText") && n.isVisibleToUser()) edit = n;
+            String t = Matcher.normalize(label(n));
+            if (t.isEmpty()) continue;
+            if (t.contains("hostname") || t.contains("اسم مضيف") || t.contains("اسم المضيف")) host = n;
+            if (t.equals("حفظ") || t.equals("save")) save = n;
+        }
+        if (host != null && (edit != null || save != null)) {
+            if (edit == null || !edit.isEnabled()) { click(host); h.postDelayed(dnsRetry, 400); return; }
+            CharSequence cur = edit.getText();
+            if (cur == null || !MainActivity.DNS_HOST.equals(cur.toString())) {
+                android.os.Bundle b = new android.os.Bundle();
+                b.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, MainActivity.DNS_HOST);
+                edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, b);
+                h.postDelayed(dnsRetry, 400);
+                return;
+            }
+            if (save != null && !dnsFilled) { dnsFilled = true; click(save); h.postDelayed(dnsRetry, 900); }
+            return;
+        }
+        // 2) Walk the menus: Private DNS > "more connection settings" > Connections / Network & internet.
+        String[][] levels = {
+            { "dns خاص", "dns الخاص", "private dns" },
+            { "اعدادات اتصال اضافيه", "المزيد من اعدادات الاتصال", "اعدادات الاتصال الاضافيه", "more connection settings",
+              "اتصال ومشاركه", "connection & sharing", "connection and sharing", "more connections" },
+            { "الاتصالات", "connections", "الشبكه والانترنت", "network & internet", "network and internet", "الشبكه والاتصال" } };
+        for (String[] level : levels) for (AccessibilityNodeInfo n : all) {
+            String t = Matcher.normalize(label(n));
+            if (t.isEmpty() || t.length() > 40 || !n.isVisibleToUser()) continue;
+            for (String w : level) if (t.equals(w) || (w.contains("dns") && t.contains(w))) {
+                if (!dnsClicked.add(level[0] + "|" + t) && level != levels[0]) continue;
+                if (click(n)) { h.postDelayed(dnsRetry, 900); return; }
+            }
+        }
+        // 3) Nothing known on screen yet: scroll down to reveal more items.
+        if (scrollFeed()) h.postDelayed(dnsRetry, 700);
+    }
+
+    private final Runnable dnsRetry = new Runnable() { @Override public void run() {
+        if (SystemClock.uptimeMillis() < dnsAssistUntil) dnsAssistStep();
+    } };
+
+    private static String label(AccessibilityNodeInfo n) {
+        CharSequence t = n.getText();
+        if (t == null || t.length() == 0) t = n.getContentDescription();
+        return t == null ? "" : t.toString();
+    }
+
+    /** Click the node or its nearest clickable parent. */
+    private static boolean click(AccessibilityNodeInfo n) {
+        for (int d = 0; n != null && d < 6; d++, n = n.getParent())
+            if (n.isClickable() && n.isEnabled()) return n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        return false;
+    }
+
     private void onNudity(String pkg, String kind, float score) {
         if (store.isPaused() || inCall()) return;
         lastBlockPkg = pkg; lastBlockAt = SystemClock.uptimeMillis();
-        if (BROWSERS.contains(pkg)) blockBrowser(pkg, "image", L.t("تم حجب صورة غير لائقة 👁", "An indecent image was blocked 👁"));
-        else block("image", L.t("تم حجب صورة غير لائقة 👁", "An indecent image was blocked 👁"), true);
+        // Immodest picture in a social app: cover and skip only, never close.
+        // Classifier hit NudeNet did not confirm, in a feed app: cover and skip; only a run of 5 within 2 minutes closes it.
+        if ("doubt".equals(kind)) {
+            if (FEED_APPS.contains(pkg)) {
+                long t = SystemClock.uptimeMillis();
+                while (!doubtHits.isEmpty() && t - doubtHits.peekFirst() > SOFT_WINDOW_MS) doubtHits.pollFirst();
+                doubtHits.addLast(t);
+                if (doubtHits.size() < DOUBT_MAX) { coverAndSkip(pkg); return; }
+                doubtHits.clear(); softHits.clear();
+                kind = "porn"; score = 1f;   // a long run of doubts: close the app now
+            } else kind = "porn";           // other apps: exactly the old behaviour
+        }
+        if ("immodest".equals(kind) || "woman".equals(kind)) {
+            if (ImageGuard.SOCIAL.contains(pkg)) coverAndSkip(pkg);
+            return;
+        }
+        if (BROWSERS.contains(pkg)) { blockBrowser(pkg, "image", L.t("تم حجب صورة غير لائقة 👁", "An indecent image was blocked 👁")); return; }
+        long now = SystemClock.uptimeMillis();
+        while (!softHits.isEmpty() && now - softHits.peekFirst() > SOFT_WINDOW_MS) softHits.pollFirst();
+        // Feed apps: a doubtful hit is covered at once and scrolled away instead of closing the app.
+        // Near-certain hits, or a third doubt within 2 minutes, still close the app as before.
+        // Immodest (not explicit) photos in social apps: always just cover and skip, never count toward closing.
+        if ("sexy".equals(kind) && ImageGuard.SOCIAL.contains(pkg) && score < ImageGuard.T_SEXY) {
+            coverAndSkip(pkg);
+            return;
+        }
+        if (FEED_APPS.contains(pkg) && score < ImageGuard.T_SURE && softHits.size() < SOFT_MAX - 1) {
+            softHits.addLast(now);
+            coverAndSkip(pkg);
+            return;
+        }
+        softHits.clear();
+        block("image", L.t("تم حجب صورة غير لائقة 👁", "An indecent image was blocked 👁"), true);
+    }
+
+    private static final Set<String> FEED_APPS = new HashSet<String>(Arrays.asList(
+        "com.facebook.katana", "com.facebook.lite", "com.instagram.android", "com.instagram.barcelona",
+        "com.google.android.youtube", "com.zhiliaoapp.musically", "com.ss.android.ugc.trill",
+        "com.twitter.android", "com.snapchat.android", "com.linkedin.android"));
+    private static final int SOFT_MAX = 3;
+    private static final long SOFT_WINDOW_MS = 120000;
+    private final ArrayDeque<Long> softHits = new ArrayDeque<Long>();
+    private final ArrayDeque<Long> doubtHits = new ArrayDeque<Long>();
+    private static final int DOUBT_MAX = 5;
+    private View cover;
+
+    /** Black screen over everything right away, scroll the feed forward, then lift the cover. */
+    private void coverAndSkip(String pkg) {
+        coolUntil = SystemClock.uptimeMillis() + 1800;
+        store.countBlock("image");
+        boolean shown = showCover();
+        boolean scrolled = scrollFeed();
+        if (!scrolled) performGlobalAction(GLOBAL_ACTION_BACK);
+        h.postDelayed(new Runnable() { @Override public void run() { scrollFeed(); } }, 500);
+        h.postDelayed(new Runnable() { @Override public void run() { hideCover(); } }, 1600);
+    }
+
+    private boolean showCover() {
+        if (cover != null) return true;
+        try {
+            TextView t = new TextView(this);
+            t.setBackgroundColor(Color.BLACK);
+            t.setTextColor(Color.WHITE);
+            t.setTextSize(18);
+            t.setGravity(Gravity.CENTER);
+            t.setText(L.t("🛡 درع العفّة\nتم تجاوز محتوى مشكوك فيه", "🛡 Iffah Shield\nSkipped doubtful content"));
+            WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.OPAQUE);
+            ((WindowManager) getSystemService(WINDOW_SERVICE)).addView(t, lp);
+            cover = t;
+            return true;
+        } catch (Exception e) { cover = null; android.util.Log.w("Iffah", "cover failed", e); return false; }
+    }
+
+    private void hideCover() {
+        if (cover == null) return;
+        try { ((WindowManager) getSystemService(WINDOW_SERVICE)).removeView(cover); } catch (Exception ignored) { }
+        cover = null;
+    }
+
+    /**
+     * Move the feed DOWN past the current post. Only vertical scrolling counts: a plain
+     * "scroll forward" on the biggest view switched Facebook to its menu tab (horizontal pager).
+     */
+    private boolean scrollFeed() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        List<AccessibilityNodeInfo> down = new ArrayList<AccessibilityNodeInfo>();
+        List<AccessibilityNodeInfo> fwd = new ArrayList<AccessibilityNodeInfo>();
+        ArrayDeque<AccessibilityNodeInfo> q = new ArrayDeque<AccessibilityNodeInfo>();
+        q.add(root);
+        int seen = 0;
+        while (!q.isEmpty() && seen++ < 800) {
+            AccessibilityNodeInfo x = q.poll();
+            if (x.isScrollable() && x.isVisibleToUser()) {
+                if (x.getActionList().contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_DOWN)) down.add(x);
+                else if (isVertical(x)) fwd.add(x);
+            }
+            for (int i = 0; i < x.getChildCount(); i++) {
+                AccessibilityNodeInfo c = x.getChild(i);
+                if (c != null) q.add(c);
+            }
+        }
+        java.util.Comparator<AccessibilityNodeInfo> big = new java.util.Comparator<AccessibilityNodeInfo>() {
+            @Override public int compare(AccessibilityNodeInfo a, AccessibilityNodeInfo b) { return area(b) - area(a); } };
+        java.util.Collections.sort(down, big);
+        java.util.Collections.sort(fwd, big);
+        for (AccessibilityNodeInfo n : down)
+            if (n.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_DOWN.getId())) return true;
+        for (AccessibilityNodeInfo n : fwd)
+            if (n.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) return true;
+        return false;
+    }
+
+    private static int area(AccessibilityNodeInfo n) { Rect r = new Rect(); n.getBoundsInScreen(r); return r.width() * r.height(); }
+
+    /** Vertical list (not a horizontal pager / carousel). */
+    private static boolean isVertical(AccessibilityNodeInfo n) {
+        CharSequence cls = n.getClassName();
+        String c = cls == null ? "" : cls.toString();
+        if (c.contains("ViewPager") || c.contains("HorizontalScrollView")) return false;
+        AccessibilityNodeInfo.CollectionInfo ci = n.getCollectionInfo();
+        if (ci != null && ci.getColumnCount() > 1 && ci.getRowCount() <= 1) return false;
+        if (n.getActionList().contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_RIGHT)
+            || n.getActionList().contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_LEFT)) return false;
+        return true;
     }
 
     private final BroadcastReceiver pkgReceiver = new BroadcastReceiver() {
@@ -242,6 +485,7 @@ public class GuardService extends AccessibilityService {
         store = new Store(this);
         store.checkGap();
         running = true;
+        self = this;
         DisplayMetrics m = getResources().getDisplayMetrics();
         screenW = m.widthPixels; screenH = m.heightPixels;
         h.removeCallbacks(ticker);
@@ -426,6 +670,7 @@ public class GuardService extends AccessibilityService {
     private boolean kidLastBlocked = true;
 
     @Override public void onDestroy() {
+        self = null;
         running = false;
         h.removeCallbacks(ticker);
         h.removeCallbacks(imageLoop);
@@ -510,6 +755,9 @@ public class GuardService extends AccessibilityService {
         if (!stateChange && now - lastScan < 300) return;
         lastScan = now;
 
+        // DNS setup helper: walks Settings to Private DNS and fills the address (only while DNS is still off).
+        if (now < dnsAssistUntil && evPkg.equals("com.android.settings")) dnsAssistStep();
+
         // Secure Folder / similar spaces: no protection exists inside them.
         if (store.isStrict()) for (String pre : ESCAPE_PKG_PREFIXES) if (evPkg.startsWith(pre)) {
             block("settings", L.t("المجلد الآمن مقفل في الوضع الصارم، لأنه لا حماية بداخله.", "Secure Folder is locked in strict mode, because there's no protection inside it."), true);
@@ -577,6 +825,9 @@ public class GuardService extends AccessibilityService {
 
         if (store.isStrict() && GUARDED_PKGS.contains(pkg)) {
             String t = Matcher.normalize(collect(root, 900, false));
+            if (guardHit(pkg, t) && SystemClock.uptimeMillis() - dnsDoneAt < 6000 && t.contains("dns")) {
+                performGlobalAction(GLOBAL_ACTION_BACK); coolUntil = SystemClock.uptimeMillis() + 800; return true;   // just finished DNS setup: leave quietly
+            }
             if (guardHit(pkg, t)) { block("settings", L.t("هذا الإعداد مقفل في الوضع الصارم.", "This setting is locked in strict mode."), true); return true; }
         }
 
@@ -622,7 +873,13 @@ public class GuardService extends AccessibilityService {
     }
 
     private boolean guardHit(String pkg, String t) {
-        for (String s : SETTINGS_TERMS) if (t.contains(s)) return true;
+        // Let the user TURN ON our Private DNS even in strict mode. Once it's on, the screen is locked again.
+        boolean dnsScreen = t.contains("dns خاص") || t.contains("dns الخاص") || t.contains("private dns");
+        boolean allowDns = dnsScreen && pkg.equals("com.android.settings") && !dnsOn(this);
+        for (String s : SETTINGS_TERMS) if (t.contains(s)) {
+            if (allowDns && (s.contains("dns"))) continue;
+            return true;
+        }
         // Let the user ACTIVATE uninstall protection even in strict mode (deactivation stays blocked).
         if (pkg.equals("com.android.settings") && (t.contains("مسوول") || t.contains("مسؤول") || t.contains("admin"))
                 && !t.contains("الغاء التثبيت") && !t.contains("uninstall") && !adminOn()) return false;

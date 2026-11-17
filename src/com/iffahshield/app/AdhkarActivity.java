@@ -22,7 +22,11 @@ public class AdhkarActivity extends Activity {
     private Store s;
     private String key, session;
     private String[][] list;
-    private int pos, cnt;
+    private int pos, cnt, base;
+    private long quranAt = 0;
+    private static final long QURAN_MIN_MS = 40_000;   // a page takes a couple of minutes; this just stops a blind tap
+    private final android.os.Handler hh = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable tick = new Runnable() { @Override public void run() { if (quranStage()) { updateQuranButton(); hh.postDelayed(this, 1000); } } };
     private boolean forced;
     private TextView title, progressText, body, source, counter;
     private ProgressBar bar;
@@ -81,7 +85,7 @@ public class AdhkarActivity extends Activity {
 
         prev = Ui.button(this, L.t("↩ الذكر السابق", "↩ Previous"), Ui.alpha(Ui.TEXT, 25), Ui.TEXT);
         prev.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) {
-            if (pos > 0) { pos--; cnt = 0; save(); show(); }
+            if (pos > 0) { pos--; cnt = 0; hh.removeCallbacks(tick); save(); show(); }
         } });
         root.addView(prev);
         Button call = Ui.button(this, L.t("📞 اتصال / طوارئ", "📞 Call / emergency"), Ui.alpha(Ui.DANGER, 60), Ui.TEXT);
@@ -110,15 +114,23 @@ public class AdhkarActivity extends Activity {
         else if (want != null) key = want + ":free";      // reading by choice
         else key = (s.sessionNow() != null && s.sessionNow().startsWith("e") ? "e" : "m") + ":free";
         session = key.substring(0, 1);
-        list = Adhkar.of(session);
-        pos = forced ? Math.min(s.adhkarPos(key), list.length - 1) : 0;
+        String[][] a = Adhkar.of(session), w = Adhkar.wird(this);
+        base = a.length;
+        list = new String[a.length + w.length][];
+        System.arraycopy(a, 0, list, 0, a.length);
+        System.arraycopy(w, 0, list, a.length, w.length);
+        pos = forced ? Math.min(s.adhkarPos(key), list.length) : 0;   // pos == list.length: the Quran page
         cnt = forced ? s.adhkarCount(key) : 0;
     }
 
     private int need() { return Integer.parseInt(list[pos][1]); }
 
+    private boolean quranStage() { return pos >= list.length; }
+
     private void show() {
-        title.setText(Adhkar.title(session));
+        if (quranStage()) { showQuran(); return; }
+        body.setTextSize(21);
+        title.setText(pos < base ? Adhkar.title(session) : L.t("وِرد التحصين 🛡", "Protection wird 🛡"));
         progressText.setText((pos + 1) + L.t(" من ", " of ") + list.length + (forced ? L.t("  •  يُفتح الهاتف عند الانتهاء 🔒", "  •  Phone unlocks when you finish 🔒") : ""));
         bar.setMax(list.length);
         bar.setProgress(pos + 1);
@@ -129,12 +141,42 @@ public class AdhkarActivity extends Activity {
         prev.setVisibility(pos > 0 ? View.VISIBLE : View.INVISIBLE);
     }
 
+    private void showQuran() {
+        int pg = s.quranPage();
+        title.setText(L.t("📖 وِردك من القرآن", "📖 Your Quran page"));
+        progressText.setText(L.t("صفحة ", "Page ") + Quran.num(pg) + L.t(" من ٦٠٤  •  سورة ", " of 604  •  Surah ") + Quran.suraOf(this, pg)
+            + (s.khatmaCount() > 0 ? L.t("  •  ختمات: ", "  •  Completions: ") + Quran.num(s.khatmaCount()) : "")
+            + (forced ? L.t("  •  آخر خطوة 🔒", "  •  Last step 🔒") : ""));
+        bar.setMax(Quran.PAGES);
+        bar.setProgress(pg);
+        body.setTextSize(23);
+        body.setText(Quran.page(this, pg));
+        source.setText(L.t("نص المصحف: مشروع تنزيل tanzil.net", "Quran text: Tanzil Project, tanzil.net"));
+        if (quranAt == 0) quranAt = android.os.SystemClock.uptimeMillis();
+        prev.setVisibility(View.VISIBLE);
+        updateQuranButton();
+        hh.removeCallbacks(tick); hh.postDelayed(tick, 1000);
+    }
+
+    private long quranLeft() { return Math.max(0, QURAN_MIN_MS - (android.os.SystemClock.uptimeMillis() - quranAt)); }
+
+    private void updateQuranButton() {
+        long left = quranLeft();
+        counter.setText(left > 0 ? "⏳ " + Quran.num((int) ((left + 999) / 1000)) : L.t("قرأتُ ✓", "Done ✓"));
+    }
+
     private void tap() {
+        if (quranStage()) {
+            if (quranLeft() > 0) { Toast.makeText(this, L.t("اقرأ الصفحة بتأنٍّ 🤍", "Read the page calmly 🤍"), Toast.LENGTH_SHORT).show(); return; }
+            s.quranNext();
+            finishAll();
+            return;
+        }
         cnt++;
         try { Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE); if (v != null) v.vibrate(cnt >= need() ? 60 : 15); } catch (Exception ignored) { }
         if (cnt >= need()) {
-            if (pos == list.length - 1) { finishAll(); return; }
             pos++; cnt = 0;
+            if (quranStage()) quranAt = 0;
         }
         save();
         show();

@@ -7,7 +7,8 @@ import java.util.List;
 
 /**
  * Arabic/English-aware multi-keyword matcher (Aho-Corasick: one pass over the text for all words).
- * "=word" means whole word; otherwise substring. Also catches leetspeak (p0rn, s3x).
+ * "=word" means whole word; "<word" must start a word (suffixes allowed, so it can't fire inside another word,
+ * e.g. "<ينيك" doesn't match the Quranic "عينيك"); otherwise substring. Also catches leetspeak (p0rn, s3x).
  */
 public final class Matcher {
     private final List<HashMap<Character, Integer>> next = new ArrayList<HashMap<Character, Integer>>();
@@ -15,15 +16,16 @@ public final class Matcher {
     private final List<List<int[]>> out = new ArrayList<List<int[]>>(); // {patternIndex}
     private final List<String> pats = new ArrayList<String>();
     private final List<Boolean> whole = new ArrayList<Boolean>();
+    private final List<Boolean> start = new ArrayList<Boolean>();
 
     public Matcher(List<String> words) {
         newNode();
         for (String w : words) {
-            boolean isWhole = w.startsWith("=");
-            String n = normalize(isWhole ? w.substring(1) : w).trim();
+            boolean isWhole = w.startsWith("="), isStart = w.startsWith("<");
+            String n = normalize(isWhole || isStart ? w.substring(1) : w).trim();
             if (n.length() == 0) continue;
             int idx = pats.size();
-            pats.add(n); whole.add(isWhole);
+            pats.add(n); whole.add(isWhole); start.add(isStart);
             int s = 0;
             for (int i = 0; i < n.length(); i++) {
                 char c = n.charAt(i);
@@ -122,9 +124,10 @@ public final class Matcher {
             s = t == null ? 0 : t;
             for (int[] o : out.get(s)) {
                 String p = pats.get(o[0]);
-                if (!whole.get(o[0])) return p;
+                if (!whole.get(o[0]) && !start.get(o[0])) return p;
                 int st = i - p.length() + 1, e = i + 1;
                 boolean okL = st == 0 || !Character.isLetterOrDigit(text.charAt(st - 1));
+                if (start.get(o[0])) { if (okL) return p; continue; }
                 boolean okR = e >= text.length() || !Character.isLetterOrDigit(text.charAt(e));
                 if (okL && okR) return p;
             }
